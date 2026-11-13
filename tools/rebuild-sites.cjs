@@ -26,7 +26,11 @@ if(require.main===module&&process.argv.includes('--all')){
   let n=0;
   fs.readdirSync(path.join(root,'designs')).filter(f=>f.endsWith('.html')&&!only.has(f.slice(0,2))).forEach(f=>{
     const r=build(path.join(root,'designs',f));if(r.miss.length)throw new Error(f+' miss '+r.miss);
-    fs.writeFileSync(path.join(root,'sites',f.replace('.html',''),'index.html'),r.html);n++;
+    const dir=path.join(root,'sites',f.replace('.html',''));
+    fs.writeFileSync(path.join(dir,'index.html'),r.html);
+    // Same header rules the studio puts in the ZIP, so previews match an export.
+    fs.writeFileSync(path.join(dir,'_headers'),W.headers(ev.slug));
+    n++;
   });
   console.log('rebuilt',n,'sites');
 }

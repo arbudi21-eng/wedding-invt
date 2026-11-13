@@ -608,9 +608,7 @@ async function make(prev){
   s.file('index.html',html);
   s.file('admin/index.html',adm);
   s.file('config.js',WedCore.configJs({url:ev.supabase.url,anonKey:ev.supabase.anonKey,slug:ev.slug}));
-  s.file('_headers',
-    '/admin/*\n  X-Robots-Tag: noindex\n/config.js\n  Cache-Control: no-store\n'+
-    `/${ev.slug}/admin/*\n  X-Robots-Tag: noindex\n/${ev.slug}/config.js\n  Cache-Control: no-store\n`);
+  s.file('_headers', WedCore.headers(ev.slug));
   files.forEach(([n,f])=>s.file(n,f));
   z.file('database/wedding_schema.sql',sql);
   z.file('SETUP.md',setup);

@@ -1,7 +1,7 @@
 // Regression tests for WedCore.build() — run with: node test-build.js
 const fs = require('fs');
 const path = require('path');
-const { build, configJs } = require('./lib/core.js');
+const { build, configJs, headers } = require('./lib/core.js');
 
 let passed = 0, failed = 0;
 function ok(cond, msg) {
@@ -84,6 +84,20 @@ for (const file of designFiles) {
   if (error) failures.push(file + ': ' + error);
 }
 ok(failures.length === 0, 'all ' + designFiles.length + ' designs build and compile' + (failures.length ? ' — ' + failures.join(' | ') : ''));
+
+console.log('');
+console.log('=== _headers tests ===');
+const hdr = headers('amara-dewa-abc123');
+ok(hdr.includes('/admin/*\n  X-Robots-Tag: noindex'), 'root admin rules are present');
+ok(hdr.includes('/config.js\n  Cache-Control: no-store'), 'root config rules are present');
+ok(hdr.includes('/amara-dewa-abc123/admin/*\n  X-Robots-Tag: noindex'), 'slug-scoped admin rules are present');
+ok(hdr.includes('/amara-dewa-abc123/config.js\n  Cache-Control: no-store'), 'slug-scoped config rules are present');
+ok((headers('').match(/\/admin\/\*/g) || []).length === 1, 'empty slug emits root rules only');
+ok((headers('   ').match(/\/admin\/\*/g) || []).length === 1, 'whitespace slug is trimmed');
+
+// The studio must call the shared function, not carry its own copy.
+const studio = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+ok(studio.includes('WedCore.headers(ev.slug)'), 'studio writes _headers through WedCore.headers');
 
 console.log('');
 console.log('=== Results: ' + passed + ' passed, ' + failed + ' failed ===');

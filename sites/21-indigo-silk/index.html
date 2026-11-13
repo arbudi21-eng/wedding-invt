@@ -100,7 +100,7 @@ footer{text-align:center;padding:2rem;color:var(--mute);font-size:.85rem}
  #intro{margin-top:-3.2rem;z-index:2}section:nth-of-type(odd):not(#hero){left:-1.2vw}section:nth-of-type(even){left:1.2vw}footer{padding-top:3rem}
 </style>
 
-<meta name="robots" content="noindex"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src https://*.supabase.co"><meta property="og:title" content="Amara &amp; Dewa"><meta property="og:description" content="Saturday, 13 March 2027">
+<meta name="robots" content="noindex"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src https://*.supabase.co"><link rel="canonical" href="./"><meta property="og:title" content="Amara &amp; Dewa"><meta property="og:description" content="Saturday, 13 March 2027"><meta property="og:url" content="./">
 <style>[hidden]{display:none!important}#wt{width:100%;max-width:30rem;font:inherit;padding:.8rem;border:1px solid currentColor;border-radius:12px;background:transparent;color:inherit}#wc{display:block;opacity:.6}#msg{margin-top:1rem}.cover-bg{position:absolute;inset:0;z-index:-1;background-position:center;background-size:cover;background-repeat:no-repeat;pointer-events:none}.cover-bg::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.32),rgba(0,0,0,.55))}[data-photo].has-photo{background-size:cover;background-position:center;background-repeat:no-repeat}[data-photo].has-photo::after{content:none!important}</style>
 </head>
 <body class="locked">
@@ -215,7 +215,7 @@ const CFG={
     {cap:'Next chapter',g:'linear-gradient(160deg,#846db6,#67579d)'}
   ]
 };
-Object.assign(CFG,{"date":new Date("2027-03-13T10:00:00"),"gifts":[{"bank":"BCA","name":"Amara Putri","no":"1234567890"}]});
+Object.assign(CFG,{"date":new Date("2027-03-13T10:00:00"),"gifts":[{"bank":"BCA","name":"Amara Putri","no":"1234567890"}],"slug":"amara-dewa-sample"});
 const $=s=>document.querySelector(s);
 
 // Guest name from link: page-link#Budi-Santoso  (or ?to=Budi%20Santoso)
@@ -267,6 +267,57 @@ tr.addEventListener('scroll',dots,{passive:true});dots();
 // Reveal
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
 document.querySelectorAll('.rv').forEach(e=>io.observe(e));
+// ---- Supabase wiring ----
+Object.assign(T.en,{send:'Confirm',ws:'Send wish',ok:'Thank you, see you there!',no2:'Thank you for letting us know.',pl:'Please use your personal link to RSVP.',err:'Something went wrong. Please try again.',wsent:'Wish sent. Thank you!',setup:'Setup not finished: add your Supabase URL and anon key in config.js'});
+Object.assign(T.id,{send:'Konfirmasi',ws:'Kirim ucapan',ok:'Terima kasih, sampai jumpa!',no2:'Terima kasih sudah memberi kabar.',pl:'Gunakan tautan pribadi Anda untuk konfirmasi kehadiran.',err:'Terjadi kesalahan. Silakan coba lagi.',wsent:'Ucapan terkirim. Terima kasih!',setup:'Pengaturan belum selesai: isi URL dan anon key Supabase di config.js'});
+const A=window.APP_CONFIG||{},ok=A.SUPABASE_URL&&!/YOUR-/.test(A.SUPABASE_URL)&&window.supabase;
+const SLUG=A.SLUG||'';
+let sb,G=null,pax=1,busy=0,mk='';
+const say=k=>{mk=k;$('#msg').textContent=k?T[L][k]:''};
+const dis=()=>['yes','no','send','wish','wt'].forEach(i=>$('#'+i).disabled=true);
+const _al=applyLang;applyLang=function(){_al();$('#wt').placeholder=L==='id'?'Tulis ucapan Anda (maks 500)':'Write your wish (max 500)';if(mk)say(mk)};
+async function run(b,fn,args,done){if(busy||!G)return false;busy=1;b.disabled=true;let r=false;
+  try{const{error}=await sb.rpc(fn,args);if(error)throw error;say(done);r=true}catch(e){say('err')}busy=0;b.disabled=false;return r}
+$('#yes').onclick=()=>{$('#pax').hidden=false};
+$('#pm').onclick=()=>{pax=Math.max(1,pax-1);$('#pn').textContent=pax};
+$('#pp').onclick=()=>{pax=Math.min(20,pax+1);$('#pn').textContent=pax};
+$('#send').onclick=e=>run(e.currentTarget,'submit_rsvp',{p_slug:SLUG,p_code:code,p_rsvp:'attending',p_pax:pax},'ok');
+$('#no').onclick=e=>run(e.currentTarget,'submit_rsvp',{p_slug:SLUG,p_code:code,p_rsvp:'declined',p_pax:0},'no2');
+$('#wt').oninput=()=>{$('#wc').textContent=$('#wt').value.length+'/500'};
+$('#wish').onclick=async e=>{const m=$('#wt').value.trim();if(!m)return;if(await run(e.currentTarget,'submit_wish',{p_slug:SLUG,p_code:code,p_message:m},'wsent'))wall()};
+async function wall(){if(!sb||!SLUG)return;try{const{data}=await sb.rpc('list_wishes',{p_slug:SLUG});
+  const w=$('#wl');w.textContent='';(data||[]).forEach(x=>{const q=document.createElement('blockquote');q.className='wq';const p=document.createElement('p');p.textContent=x.message;const c=document.createElement('cite');c.textContent=x.name;q.append(p,c);w.appendChild(q)});
+  $('#wishes').hidden=!(data&&data.length)}catch(e){}}
+async function init(){
+  if(!ok){dis();say('setup');return}
+  sb=supabase.createClient(A.SUPABASE_URL,A.SUPABASE_ANON_KEY);
+  if(code){try{const{data,error}=await sb.rpc('open_invitation',{p_slug:SLUG,p_code:code});if(error)throw error;G=data}catch(e){}}
+  if(G){if(G.lang==='en'||G.lang==='id')L=G.lang;GN=(G.name||'').replace(/[<>]/g,'');if(G.pax>0){pax=G.pax;$('#pn').textContent=pax}
+    if(G.rsvp==='attending')$('#pax').hidden=false;if(G.wish){$('#wt').value=G.wish;$('#wc').textContent=G.wish.length+'/500'}}
+  else{dis();say('pl')}
+  applyLang();wall();setInterval(()=>{if(!document.hidden)wall()},3e4)
+}
+
+// ---- photo slots: cover / groom / bride ----
+(function(){
+  var map={cover:CFG.cover,man:CFG.man,woman:CFG.woman};
+  Object.keys(map).forEach(function(k){
+    var src=map[k]; if(!src) return;
+    document.querySelectorAll('[data-photo="'+k+'"]').forEach(function(el){
+      el.classList.add('has-photo');
+      el.style.backgroundImage="url('"+src+"')";
+      el.style.backgroundSize='cover';
+      el.style.backgroundPosition='center';
+    });
+    if(k==='cover'){
+      var c=document.getElementById('cover'); if(!c) return;
+      var b=c.querySelector('.cover-bg');
+      if(!b){b=document.createElement('div');b.className='cover-bg';b.setAttribute('aria-hidden','true');c.insertBefore(b,c.firstChild)}
+      b.style.backgroundImage="url('"+src+"')";
+      c.classList.add('has-photo');
+    }
+  });
+})();
 const vd=$('#vid');
 if(CFG.video.src){const v=document.createElement('video');v.controls=true;v.playsInline=true;v.preload='metadata';if(CFG.video.poster)v.poster=CFG.video.poster;v.src=CFG.video.src;vd.appendChild(v)}
 else vd.innerHTML='<span class="pl" data-t="vph">Your video goes here</span>';
@@ -289,58 +340,6 @@ CFG.gifts.forEach(a=>{const r=document.createElement('div');r.className='acct';
   r.append(l,c);$('#giftlist').appendChild(r)});
 $('#lx').onclick=()=>{lb.hidden=true};lb.onclick=e=>{if(e.target===lb)lb.hidden=true};addEventListener('keydown',e=>{if(e.key==='Escape')lb.hidden=true});
 if(CFG.wishes.length){$('#wishes').hidden=false;CFG.wishes.forEach(w=>{const q=document.createElement('blockquote');q.className='wq';const p=document.createElement('p');p.textContent=w.t;const c=document.createElement('cite');c.textContent=w.n;q.append(p,c);$('#wl').appendChild(q)})}
-// ---- Supabase wiring ----
-CFG.wishes=[];
-Object.assign(T.en,{send:'Confirm',ws:'Send wish',ok:'Thank you, see you there!',no2:'Thank you for letting us know.',pl:'Please use your personal link to RSVP.',err:'Something went wrong. Please try again.',wsent:'Wish sent. Thank you!',setup:'Setup not finished: add your Supabase URL and anon key in config.js'});
-Object.assign(T.id,{send:'Konfirmasi',ws:'Kirim ucapan',ok:'Terima kasih, sampai jumpa!',no2:'Terima kasih sudah memberi kabar.',pl:'Gunakan tautan pribadi Anda untuk konfirmasi kehadiran.',err:'Terjadi kesalahan. Silakan coba lagi.',wsent:'Ucapan terkirim. Terima kasih!',setup:'Pengaturan belum selesai: isi URL dan anon key Supabase di config.js'});
-const A=window.APP_CONFIG||{},ok=A.SUPABASE_URL&&!/YOUR-/.test(A.SUPABASE_URL)&&window.supabase;
-let sb,G=null,pax=1,busy=0,mk='';
-const say=k=>{mk=k;$('#msg').textContent=k?T[L][k]:''};
-const dis=()=>['yes','no','send','wish','wt'].forEach(i=>$('#'+i).disabled=true);
-const _al=applyLang;applyLang=function(){_al();$('#wt').placeholder=L==='id'?'Tulis ucapan Anda (maks 500)':'Write your wish (max 500)';if(mk)say(mk)};
-async function run(b,fn,args,done){if(busy||!G)return false;busy=1;b.disabled=true;let r=false;
-  try{const{error}=await sb.rpc(fn,args);if(error)throw error;say(done);r=true}catch(e){say('err')}busy=0;b.disabled=false;return r}
-$('#yes').onclick=()=>{$('#pax').hidden=false};
-$('#pm').onclick=()=>{pax=Math.max(1,pax-1);$('#pn').textContent=pax};
-$('#pp').onclick=()=>{pax=Math.min(20,pax+1);$('#pn').textContent=pax};
-$('#send').onclick=e=>run(e.currentTarget,'submit_rsvp',{p_code:code,p_rsvp:'attending',p_pax:pax},'ok');
-$('#no').onclick=e=>run(e.currentTarget,'submit_rsvp',{p_code:code,p_rsvp:'declined',p_pax:0},'no2');
-$('#wt').oninput=()=>{$('#wc').textContent=$('#wt').value.length+'/500'};
-$('#wish').onclick=async e=>{const m=$('#wt').value.trim();if(!m)return;if(await run(e.currentTarget,'submit_wish',{p_code:code,p_message:m},'wsent'))wall()};
-async function wall(){if(!sb)return;try{const{data}=await sb.from('wishes').select('name,message,created_at').order('created_at',{ascending:false}).limit(50);
-  const w=$('#wl');w.textContent='';(data||[]).forEach(x=>{const q=document.createElement('blockquote');q.className='wq';const p=document.createElement('p');p.textContent=x.message;const c=document.createElement('cite');c.textContent=x.name;q.append(p,c);w.appendChild(q)});
-  $('#wishes').hidden=!(data&&data.length)}catch(e){}}
-async function init(){
-  if(!ok){dis();say('setup');return}
-  sb=supabase.createClient(A.SUPABASE_URL,A.SUPABASE_ANON_KEY);
-  if(code){try{const{data,error}=await sb.rpc('open_invitation',{p_code:code});if(error)throw error;G=data}catch(e){}}
-  if(G){if(G.lang==='en'||G.lang==='id')L=G.lang;GN=(G.name||'').replace(/[<>]/g,'');if(G.pax>0){pax=G.pax;$('#pn').textContent=pax}
-    if(G.rsvp==='attending')$('#pax').hidden=false;if(G.wish){$('#wt').value=G.wish;$('#wc').textContent=G.wish.length+'/500'}}
-  else{dis();say('pl')}
-  applyLang();wall();setInterval(()=>{if(!document.hidden)wall()},3e4)}
-
-
-// ---- photo slots: cover / groom / bride ----
-(function(){
-  var map={cover:CFG.cover,man:CFG.man,woman:CFG.woman};
-  Object.keys(map).forEach(function(k){
-    var src=map[k]; if(!src) return;
-    document.querySelectorAll('[data-photo="'+k+'"]').forEach(function(el){
-      el.classList.add('has-photo');
-      el.style.backgroundImage="url('"+src+"')";
-      el.style.backgroundSize='cover';
-      el.style.backgroundPosition='center';
-    });
-    if(k==='cover'){
-      var c=document.getElementById('cover'); if(!c) return;
-      var b=c.querySelector('.cover-bg');
-      if(!b){b=document.createElement('div');b.className='cover-bg';b.setAttribute('aria-hidden','true');c.insertBefore(b,c.firstChild)}
-      b.style.backgroundImage="url('"+src+"')";
-      c.classList.add('has-photo');
-    }
-  });
-})();
-
 parse();init();
 </script>
 </body>

@@ -2,3 +2,7 @@
   X-Robots-Tag: noindex
 /config.js
   Cache-Control: no-store
+/amara-dewa-sample/admin/*
+  X-Robots-Tag: noindex
+/amara-dewa-sample/config.js
+  Cache-Control: no-store
