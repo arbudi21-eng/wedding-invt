@@ -544,9 +544,10 @@ async function make(prev){
   if(!$('#n1').value||!$('#n2').value||!$('#dt').value)
     return say('Please fill in both names and the wedding date.');
 
-  // ── Generate slug from couple's names ──
+  // ── Use the slug currently shown in the "Your link" field, so the link
+  //    the couple copied is the same one written into the ZIP ──
   const names = [$('#n1').value.trim(), $('#n2').value.trim()];
-  const slug = WedCore.makeSlug(names);
+  const slug = ensureSlug();
 
   const ev={
     names,
@@ -606,8 +607,10 @@ async function make(prev){
   const z=new JSZip(),s=z.folder(siteDir);
   s.file('index.html',html);
   s.file('admin/index.html',adm);
-  s.file('config.js',WedCore.configJs(ev.supabase,{slug:ev.slug}));
-  s.file('_headers','/admin/*\n  X-Robots-Tag: noindex\n/config.js\n  Cache-Control: no-store\n');
+  s.file('config.js',WedCore.configJs({url:ev.supabase.url,anonKey:ev.supabase.anonKey,slug:ev.slug}));
+  s.file('_headers',
+    '/admin/*\n  X-Robots-Tag: noindex\n/config.js\n  Cache-Control: no-store\n'+
+    `/${ev.slug}/admin/*\n  X-Robots-Tag: noindex\n/${ev.slug}/config.js\n  Cache-Control: no-store\n`);
   files.forEach(([n,f])=>s.file(n,f));
   z.file('database/wedding_schema.sql',sql);
   z.file('SETUP.md',setup);
@@ -631,14 +634,26 @@ for(const [id,p] of [['pv',1],['gen',0],['pv2',1],['gen2',0]]){
 const linkPreview=$('#link-preview');
 const regenBtn=$('#regenerate-suffix');
 
-function updateLinkPreview(){
+let currentSlug='', currentSlugKey='';
+const slugKeyFor=(n1,n2)=>n1.toLowerCase()+'\u0000'+n2.toLowerCase();
+
+// The slug shown in the preview is the single source of truth. It only
+// changes when the names change or the user asks for a new suffix, so the
+// copied link and the generated ZIP can never disagree.
+function ensureSlug(){
   const n1=$('#n1').value.trim(), n2=$('#n2').value.trim();
-  if(!n1||!n2){
-    linkPreview.value='';
-    return;
+  if(!n1||!n2) return '';
+  const key=slugKeyFor(n1,n2);
+  if(!currentSlug || currentSlugKey!==key){
+    currentSlug=WedCore.makeSlug([n1,n2]);
+    currentSlugKey=key;
   }
-  const slug=WedCore.makeSlug([n1,n2]);
-  linkPreview.value=`https://YOUR-HOST/${slug}/`;
+  return currentSlug;
+}
+
+function updateLinkPreview(){
+  const slug=ensureSlug();
+  linkPreview.value=slug?`https://YOUR-HOST/${slug}/`:'';
 }
 
 $('#n1').addEventListener('input',updateLinkPreview);
@@ -647,10 +662,10 @@ $('#n2').addEventListener('input',updateLinkPreview);
 regenBtn.addEventListener('click',()=>{
   const n1=$('#n1').value.trim(), n2=$('#n2').value.trim();
   if(!n1||!n2){say('Please fill in both names first.');return}
-  // Regenerate suffix by calling makeSlug again (crypto gives new random each time)
-  const slug=WedCore.makeSlug([n1,n2]);
-  linkPreview.value=`https://YOUR-HOST/${slug}/`;
-  say('Suffix regenerated.');
+  currentSlug=WedCore.makeSlug([n1,n2]);
+  currentSlugKey=slugKeyFor(n1,n2);
+  linkPreview.value=`https://YOUR-HOST/${currentSlug}/`;
+  say('Suffix regenerated — the ZIP will use this link.');
 });
 
 // Initial update when names already have values

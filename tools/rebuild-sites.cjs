@@ -7,20 +7,12 @@ const sb={window:{},console};sb.window=sb;vm.createContext(sb);
 vm.runInContext(fs.readFileSync(path.join(root,'lib/core.js'),'utf8'),sb);
 const W=sb.WedCore;
 const wiring=fs.readFileSync(path.join(root,'templates/wiring.js'),'utf8');
-const ev={names:['Amara','Dewa'],dateISO:'2027-03-13T10:00:00',
+const ev={names:['Amara','Dewa'],slug:'amara-dewa-sample',dateISO:'2027-03-13T10:00:00',
   gifts:[{bank:'BCA',name:'Amara Putri',no:'1234567890'}],
   schedule:{ceremony:'10:00',reception:'12:00'},
   venue:{name:'Your Venue Name',address:'Street address, City'},
   dress:{en:'Warm neutrals<small>Mocha, sand, clay, cream</small>',id:'Warna hangat<small>Mocha, pasir, terakota, krem</small>'}};
-// WORKAROUND (core.js left untouched): WedCore.build step 7 uses a lazy regex that runs from `let pax=1` to the
-// final `parse();` and so deletes the video/album/gifts/wishes JS that sits between them. Moving that block above
-// `let pax=1` keeps it out of the match, which reproduces what the existing sites/ contain.
-function stage(html){
-  const a=html.indexOf('let pax=1;'),b=html.indexOf("const vd=$('#vid');"),e=html.lastIndexOf('parse();');
-  if(a<0||b<0||b<a)return html;
-  return html.slice(0,a)+html.slice(b,e)+html.slice(a,b)+html.slice(e);
-}
-const build=f=>W.build(stage(fs.readFileSync(f,'utf8')),ev,{},wiring);
+const build=f=>W.build(fs.readFileSync(f,'utf8'),ev,{},wiring,ev.slug);
 module.exports={build};
 if(require.main===module){
   const chk=process.argv.indexOf('--check');

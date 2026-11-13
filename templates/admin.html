@@ -34,7 +34,20 @@ const code=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',a=crypto.getRandomVal
 const FL=[['all','All'],['new','Not sent'],['sent','Sent'],['opened','Opened'],['attending','Attending'],['declined','Declined'],['pending','Waiting']];
 let sb,S={g:[],w:[],s:{},sum:{},f:'all',q:'',wid:null},tm;
 const baseUrl=b=>(b||'').replace(/\/+$/,'');
-const link=g=>`${baseUrl(S.s.base_url)}/${SLUG}/?c=${g.code}`;
+// Site root for this invitation. Handles both deployment styles without
+// doubling the slug: shared host (https://host/{slug}/) and own host or
+// subdomain (https://{slug}.domain/).
+function siteUrl(){
+  let b=baseUrl(S.s.base_url);
+  if(!b) return '';
+  b=b.replace(/\/admin\/?$/,'');
+  const esc=SLUG.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const hasPath=new RegExp('/'+esc+'(/|$)').test(b);
+  const host=(b.match(/^https?:\/\/([^/]+)/i)||[])[1]||'';
+  const isSubdomain=host.toLowerCase().startsWith(SLUG.toLowerCase()+'.');
+  return (hasPath||isSubdomain)?b:b+'/'+SLUG;
+}
+const link=g=>{const u=siteUrl();return u?`${u}/?c=${g.code}`:''};
 const msgFor=g=>(S.s['template_'+g.lang]||'').replaceAll('{name}',g.name).replaceAll('{link}',link(g));
 const fmt=d=>d?new Date(d).toLocaleString():'';
 async function guard(b,fn){if(b)b.disabled=true;try{await fn()}catch(e){toast(e.message||'Error')}if(b)b.disabled=false}
@@ -43,8 +56,8 @@ async function load(){
   const[g,w,s,m]=await Promise.all([
     sb.from('guests').select('*').eq('wedding_id',S.wid).order('created_at',{ascending:false}),
     sb.from('wishes').select('*').eq('wedding_id',S.wid).order('created_at',{ascending:false}),
-    sb.from('settings').select('*').eq('id',1).eq('wedding_id',S.wid).maybeSingle(),
-    sb.from('guest_summary').select('*').maybeSingle()
+    sb.from('settings').select('*').eq('wedding_id',S.wid).maybeSingle(),
+    sb.from('guest_summary').select('*').eq('wedding_id',S.wid).maybeSingle()
   ]);
   const er=g.error||w.error||s.error||m.error;if(er)throw er;S.g=g.data;S.w=w.data;S.s=s.data||{};S.sum=m.data||{};draw()}
 const refresh=()=>load().catch(e=>toast(e.message));
@@ -76,14 +89,17 @@ $('#bp').onclick=()=>{rows=[];const v=$('#bv');v.textContent='';$('#bk').value.s
 $('#bi').onclick=e=>guard(e.currentTarget,async()=>{const{error}=await sb.from('guests').insert(rows);if(error)throw error;toast(rows.length+' guests imported');$('#bk').value='';$('#bv').textContent='';rows=[];e.target.disabled=true;await load()});
 $('#csv').onclick=()=>{const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',L=[['name','phone','lang','link','sent','opened','rsvp','pax'].join(',')];S.g.forEach(g=>L.push([g.name,g.phone,g.lang,link(g),g.sent_status,g.opened_at||'',g.rsvp,g.pax].map(q).join(',')));
  const a=h('a',{href:URL.createObjectURL(new Blob([L.join('\n')],{type:'text/csv'})),download:'guests.csv'});a.click();URL.revokeObjectURL(a.href)};
-$('#ss').onclick=e=>guard(e.currentTarget,async()=>{const base=$('#sb').value.trim().split(/[?#]/)[0].replace(/\/+$/,'');const{error}=await sb.from('settings').update({couple_phone:nph($('#sp').value),base_url:base,template_en:$('#te').value,template_id:$('#ti').value}).eq('id',1).eq('wedding_id',S.wid);if(error)throw error;$('#sp').dataset.f='';toast('Settings saved');await load()});
+$('#ss').onclick=e=>guard(e.currentTarget,async()=>{const base=$('#sb').value.trim().split(/[?#]/)[0].replace(/\/+$/,'');const{error}=await sb.from('settings').update({couple_phone:nph($('#sp').value),base_url:base,template_en:$('#te').value,template_id:$('#ti').value}).eq('wedding_id',S.wid);if(error)throw error;$('#sp').dataset.f='';toast('Settings saved');await load()});
 $('#pv').onclick=()=>{const g=S.g.find(x=>x.id==$('#pg').value);$('#po').textContent=g?msgFor(g):'Add a guest first.'};
 async function enter(){
+  // Check admin rights first: it is a security-definer RPC, so it works
+  // before the console can read any wedding row.
+  const{data:isAdmin}=await sb.rpc('am_i_admin',{p_slug:SLUG});
+  if(!isAdmin){await sb.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;$('#note').hidden=false;$('#note').textContent='This account is not an admin for this invitation.';return}
   // Look up wedding_id from slug
   const{data:wdata,error:werr}=await sb.from('weddings').select('id').eq('slug',SLUG).maybeSingle();
   if(werr||!wdata){await sb.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;$('#note').hidden=false;$('#note').textContent='Wedding not found for slug: '+SLUG;return}
   S.wid=wdata.id;
-  const{data,error}=await sb.rpc('am_i_admin');if(error||!data){await sb.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;$('#note').hidden=false;$('#note').textContent='This account is not an admin.';return}
   $('#note').hidden=true;$('#login').hidden=true;$('#app').hidden=false;await refresh();clearInterval(tm);tm=setInterval(()=>{if(!document.hidden)refresh()},3e4)}
 $('#login').onsubmit=e=>{e.preventDefault();guard(e.submitter,async()=>{const{error}=await sb.auth.signInWithPassword({email:$('#em').value,password:$('#pw').value});if(error)throw error;$('#pw').value='';await enter()})};
 $('#out').onclick=async()=>{await sb.auth.signOut();clearInterval(tm);$('#app').hidden=true;$('#login').hidden=false};
