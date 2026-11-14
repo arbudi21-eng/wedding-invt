@@ -38,6 +38,75 @@ psql "postgresql://postgres.<ref>:<password>@<host>:6543/postgres" \
   -v ON_ERROR_STOP=1 -f database/0001_baseline.sql
 ```
 
+## `0002_saas.sql`
+
+Phase 1 of the SaaS: drafts that live in Postgres instead of a browser tab.
+Apply it **after** `0001_baseline.sql`; it is idempotent and never touches the
+frozen baseline or rewrites existing rows.
+
+What it adds:
+
+- Columns on `public.weddings`: `design`, `status` (`draft|published|archived`),
+  `content` (JSONB, ≤ 256 KB), `published_at`, `build_hash`, `active_until`,
+  `updated_at`.
+- Constraints: the slug shape `{names}-{BASE32}`, slug length 10–64, the status
+  set, a slug-shaped design id, and a JSON-object content body.
+- `weddings_slug_lower_idx`: uniqueness is case-insensitive, so nobody can claim
+  `Amara-Dewa-ABCDEF` as a shadow of `amara-dewa-ABCDEF`. The original
+  `weddings_slug_key` index from `0001` is left alone.
+- `weddings_guard()`: the slug is immutable once `status <> 'draft'`, and
+  `updated_at` advances on every update.
+- Owner RLS on `weddings` for `select` / `update` / `delete`. There is
+  deliberately **no insert policy**.
+- `create_wedding(p_slug, p_design, p_content)`, a `security definer` function
+  that inserts the row and registers the owner in `admins`. It is revoked from
+  `anon` and granted to `authenticated`.
+
+### Why creation is a function
+
+`create_wedding()` is the only insert path, so the browser never needs insert
+rights and cannot forge an owner. It also must **not** catch
+`unique_violation`: PostgREST returns SQLSTATE `23505` to the app, which
+regenerates the base32 suffix and retries (five attempts in
+`apps/web/app/actions/weddings.js`). Malformed or reserved slugs raise `22023`;
+an unauthenticated call raises `42501`.
+
+The slug keeps its mixed case — lowercase name parts, uppercase base32 suffix —
+so the trigger and the function never call `lower(slug)`. Only the unique index
+is case-insensitive.
+
+### Slug length is 10, not 12
+
+`makeSlug()` can emit `a-b-ABCDEF` for two one-letter names. The bound starts at
+10 because that is the shortest real output; a stricter minimum would reject
+valid couples at sign-up. Both the database suite and
+`apps/web/test/app.test.js` assert this.
+
+### Apply to Supabase
+
+Paste `0001_baseline.sql` first, then `0002_saas.sql`, into the SQL Editor. Via
+`psql`, use the **session** pooler on port 5432 for migrations — the 6543
+transaction pooler does not keep `SET ROLE` alive across statements:
+
+```bash
+psql "postgresql://postgres.<ref>:<password>@<host>:5432/postgres" \
+  -v ON_ERROR_STOP=1 -f database/0001_baseline.sql \
+  -v ON_ERROR_STOP=1 -f database/0002_saas.sql
+```
+
+If the project already has weddings rows, run this first. It must return zero
+rows, or the new constraints will refuse to install:
+
+```sql
+select id, slug
+  from public.weddings
+ where slug !~ '^[a-z0-9]+(-[a-z0-9]+)*-[A-Z2-7]{6}$'
+    or char_length(slug) not between 10 and 64
+    or slug ~ '^(admin|assets|api|sites)(-|$)';
+```
+
+Fix or delete any row it finds before applying the migration.
+
 ## Local proof harness
 
 `test/run.ps1` starts `postgres:16` in Docker, installs a shim that reproduces
@@ -61,11 +130,15 @@ running on failure so you can inspect it; `docker rm -f wg-pg` cleans up.
 |---|---|---|
 | 1 | `test/supabase-stub.sql` | roles, `auth` schema, `auth.uid()`, default privileges |
 | 2 | `0001_baseline.sql` | the schema installs on real PostgreSQL |
-| 3 | `test/phase0-setup.sql` | `claim_slug`, duplicate rejection, settings trigger, fixtures |
-| 4 | `test/phase0-anon.sql` | guest RPCs work; anon cannot read tables or the view |
-| 5 | `test/phase0-auth.sql` | two admins cannot see or write each other's data |
-| 6 | `test/phase0-security.sql` | anon holds no execute grant on admin functions |
-| 7–8 | schema + security again | re-running the file does not weaken grants |
+| 3 | `0002_saas.sql` | Phase 1 columns, constraints, owner RLS, `create_wedding()` |
+| 4 | `test/phase0-setup.sql` | `claim_slug`, duplicate rejection, settings trigger, fixtures |
+| 5 | `test/phase0-anon.sql` | guest RPCs work; anon cannot read tables or the view |
+| 6 | `test/phase0-auth.sql` | two admins cannot see or write each other's data |
+| 7 | `test/phase0-security.sql` | anon holds no execute grant on admin functions |
+| 8 | `test/phase1-saas.sql` | draft creation, tenant isolation, edit rules, post-publish slug lock |
+| 9–11 | schema + `0002` + grants again | re-running either file does not weaken grants |
+
+73 assertions in total; exit code 0 means every one passed.
 
 ### What it does **not** prove
 
@@ -82,6 +155,9 @@ Still unproven before charging money:
 - Transaction pooler mode (port 6543). The suites use session mode (5432)
   because `SET ROLE` must survive across statements. The app will use 6543, so
   confirm one RPC round-trip through it during Phase 1.
+- The Phase 1 gate itself: create an invitation in the app, close the browser,
+  sign in on another device, and confirm the draft is intact and the slug is
+  unchanged. That needs the project's anon key and a deployed (or local) app.
 - Project-level settings: statement timeout and that the project is on a paid
   plan (free projects pause, and a paused project breaks every live RSVP).
 - `security_invoker` views require PostgreSQL 15+ — confirmed on 17.11.

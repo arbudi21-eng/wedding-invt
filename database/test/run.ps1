@@ -5,8 +5,9 @@
   security model holds.
 
   It spins up postgres:16 in Docker, installs a Supabase shim (roles, auth
-  schema, auth.uid(), default privileges), applies the schema, then runs four
-  behavioural suites. Deleting the database between runs keeps it repeatable.
+  schema, auth.uid(), default privileges), applies the schema and the Phase 1
+  migration, then runs the behavioural suites. Deleting the database between
+  runs keeps it repeatable.
 
   Usage:
     powershell -ExecutionPolicy Bypass -File database/test/run.ps1
@@ -33,6 +34,8 @@ $testDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $testDir)
 if (-not $Schema) { $Schema = Join-Path $repoRoot 'database\0001_baseline.sql' }
 if (-not (Test-Path $Schema)) { throw "Schema file not found: $Schema" }
+$SaasSchema = Join-Path $repoRoot 'database\0002_saas.sql'
+if (-not (Test-Path $SaasSchema)) { throw "Migration file not found: $SaasSchema" }
 
 if ($Database -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
   throw "Unsafe database name: $Database"
@@ -91,11 +94,14 @@ $env:PGCLIENTENCODING = 'UTF8'
 $steps = @(
   @{ name = 'supabase shim';          file = Join-Path $testDir 'supabase-stub.sql' },
   @{ name = 'schema (fresh)';         file = $Schema },
+  @{ name = 'saas migration';         file = $SaasSchema },
   @{ name = 'fixtures';               file = Join-Path $testDir 'phase0-setup.sql' },
   @{ name = 'guest RPCs as anon';     file = Join-Path $testDir 'phase0-anon.sql' },
   @{ name = 'RLS as two admins';      file = Join-Path $testDir 'phase0-auth.sql' },
   @{ name = 'grant surface';          file = Join-Path $testDir 'phase0-security.sql' },
+  @{ name = 'drafts + ownership';     file = Join-Path $testDir 'phase1-saas.sql' },
   @{ name = 'schema (re-run)';        file = $Schema },
+  @{ name = 'saas migration (re-run)';file = $SaasSchema },
   @{ name = 'grant surface (re-run)'; file = Join-Path $testDir 'phase0-security.sql' }
 )
 

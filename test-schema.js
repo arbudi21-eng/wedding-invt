@@ -122,6 +122,80 @@ if (!fs.existsSync(baselinePath)) {
 }
 
 console.log('');
+console.log('=== phase 1 migration (drafts + ownership) ===');
+
+const saasPath = path.join(__dirname, 'database', '0002_saas.sql');
+if (!fs.existsSync(saasPath)) {
+  ok(false, 'database/0002_saas.sql exists');
+} else {
+  const saasRaw = fs.readFileSync(saasPath, 'utf8');
+  const saas = saasRaw.split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+
+  const saasDollars = (saasRaw.match(/\$\$/g) || []).length;
+  ok(saasDollars % 2 === 0, '0002 dollar-quoted blocks are balanced');
+
+  // Re-running the migration must not collide with existing objects.
+  const saasPolicies = [...saas.matchAll(/create policy (\w+)/g)].map(m => m[1]);
+  const saasMissingDrop = saasPolicies.filter(n => !new RegExp('drop policy if exists ' + n + '\\b').test(saas));
+  ok(saasMissingDrop.length === 0,
+    '0002 drops every policy it recreates' + (saasMissingDrop.length ? ' (missing: ' + saasMissingDrop.join(', ') + ')' : ''));
+
+  // Reuse the existing owner column; a second owner_id would split the truth.
+  ok(!/owner_id\s+uuid/i.test(saas), '0002 does not add a duplicate owner_id column');
+  ok(/alter table public\.weddings[\s\S]{0,400}?add column if not exists status/i.test(saas),
+    '0002 adds the lifecycle columns idempotently');
+  ok(/add column if not exists content\s+jsonb/i.test(saas), '0002 adds JSONB content');
+
+  // The app generates {names}-{UPPERCASE base32}; the constraint must allow it.
+  ok(/slug ~ '\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*-\[A-Z2-7\]\{6\}\$'/.test(saas),
+    'the slug constraint allows an uppercase base32 suffix');
+  ok(/create unique index if not exists weddings_slug_lower_idx[\s\S]{0,80}?lower\(slug\)/i.test(saas),
+    'slug uniqueness is case-insensitive');
+  ok(!/create unique index if not exists weddings_slug_key/i.test(saas),
+    '0002 does not reuse the implicit weddings_slug_key index name');
+
+  ok(/jsonb_typeof\(content\) = 'object'/.test(saas), 'content is constrained to a JSON object');
+  ok(/octet_length\(content::text\) <= 262144/.test(saas), 'content has a 256 KB cap');
+  ok(/status in \('draft', 'published', 'archived'\)/.test(saas), 'status has a closed set of values');
+  // makeSlug() can emit a-b-XXXXXX for two one-letter names; the bound must
+  // start at 10 or short-named couples cannot create a draft at all.
+  ok(/char_length\(slug\) between 10 and 64/.test(saas),
+    'the slug length bound admits the shortest generated slug');
+
+  // Creation is a definer function: the client never needs insert rights.
+  ok(/function public\.create_wedding\(/.test(saas), 'create_wedding() exists');
+  ok(/security definer/.test(saas), 'create_wedding() is security definer');
+  ok(/revoke all on function public\.create_wedding\(text, text, jsonb\) from [^;]*\banon\b/i.test(saas),
+    'create_wedding is revoked from anon');
+  ok(/grant execute on function public\.create_wedding\(text, text, jsonb\) to authenticated/i.test(saas),
+    'create_wedding is authenticated-only');
+  ok(/insert into public\.admins/i.test(saas), 'create_wedding registers the owner as admin');
+  ok(!/exception when unique_violation/i.test(saas),
+    'create_wedding lets 23505 escape so the app can retry the slug');
+
+  // Owner RLS: read/update/delete only. Insert stays RPC-only.
+  ok(/create policy weddings_owner_read[\s\S]{0,200}?using \(owner = auth\.uid\(\)\)/.test(saas),
+    'owners can read their own weddings');
+  ok(/create policy weddings_owner_update[\s\S]{0,240}?with check \(owner = auth\.uid\(\)\)/.test(saas),
+    'owners can update their own weddings without transferring them');
+  ok(/create policy weddings_owner_delete[\s\S]{0,160}?using \(owner = auth\.uid\(\)\)/.test(saas),
+    'owners can delete their own weddings');
+  ok(!/create policy weddings_owner_insert/i.test(saas),
+    'there is no direct insert policy for weddings');
+
+  ok(/function public\.weddings_guard\(\)/.test(saas), 'the slug guard trigger function exists');
+  ok(/slug is immutable after publish/.test(saas), 'the slug is immutable after publish');
+  ok(/revoke all on function public\.weddings_guard\(\) from [^;]*\banon\b/i.test(saas),
+    'the trigger function is revoked from anon');
+
+  // Phase 1 must not smuggle in later-phase tables half-finished.
+  ok(!/create table[^;]*public\.(orders|plans|assets)/i.test(saas),
+    '0002 leaves orders/plans/assets to later phases');
+  ok(!/open_invitation[\s\S]{0,300}?status/i.test(saas),
+    '0002 does not gate guest RPCs on status yet');
+}
+
+console.log('');
 console.log('=== call sites match the schema ===');
 
 ok(!/from\('wishes'\)\.select/.test(core), 'guest site does not select the wishes table directly');
@@ -130,6 +204,18 @@ ok(!/\.eq\('id',1\)/.test(admin), 'admin console no longer queries settings by i
 ok(/from\('settings'\)\.select\('\*'\)\.eq\('wedding_id',S\.wid\)/.test(admin), 'admin console reads settings by wedding_id');
 ok(/from\('guest_summary'\)\.select\('\*'\)\.eq\('wedding_id',S\.wid\)/.test(admin), 'admin console scopes the summary to its wedding');
 ok(/rpc\('am_i_admin',\{p_slug:SLUG\}\)/.test(admin), 'admin console checks admin rights for its own slug');
+
+// The app re-derives the slug rule in JS so it can fail before a round trip.
+// If the two ever disagree, someone gets a database error they cannot fix.
+const appDraftPath = path.join(__dirname, 'apps', 'web', 'lib', 'draft.js');
+if (fs.existsSync(appDraftPath)) {
+  const appDraft = fs.readFileSync(appDraftPath, 'utf8');
+  const match = appDraft.match(/SLUG_RE = \/(.+)\//);
+  ok(match && match[1] === '^[a-z0-9]+(-[a-z0-9]+)*-[A-Z2-7]{6}$',
+    'apps/web SLUG_RE is identical to the database slug constraint');
+} else {
+  ok(false, 'apps/web/lib/draft.js exists');
+}
 
 console.log('');
 console.log('=== Results: ' + passed + ' passed, ' + failed + ' failed ===');

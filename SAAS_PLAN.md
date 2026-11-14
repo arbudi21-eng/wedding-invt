@@ -260,6 +260,19 @@ project's anon key), plus the pooler and project-setting checks listed in
 **Gate:** create an invitation, close the browser, log back in on another device,
 content is intact and the slug is unchanged.
 
+**Built (2026-11-14):** `database/0002_saas.sql` adds the draft columns,
+constraints, owner RLS, `create_wedding()` and the slug guard;
+`database/test/phase1-saas.sql` proves them (73 assertions green in the harness,
+66 static checks in `test-schema.js`). `apps/web` builds and runs on Next 16.4.6:
+auth (`/login`, `/signup`, Google, sign-out), `/dashboard` create/list/delete,
+`/build/{id}` edit-and-save, `proxy.js` session refresh + route guards, and 132
+app assertions (`npm test`). Drafts may be incomplete: names are required, a
+date is optional but must be real.
+
+**Gate status:** not yet met on the live project. It needs the project's anon key
+(public by design) in `apps/web/.env.local`, `0002` applied to Supabase, then the
+create → new device → sign in → intact-draft check.
+
 ### Phase 2 — Generation + storage + publish (4–6 days)
 
 - Port the studio form (`index.html` steps 1–7) to React. Keep every field name
