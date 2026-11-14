@@ -235,7 +235,8 @@ as $$
 $$;
 
 -- Claim a slug: inserts into weddings and fails on duplicates.
--- Admin-only: exposed to anon it would let anyone insert arbitrary wedding rows.
+-- Admin-only: exposed to anon it would let anyone with the public anon key
+-- insert arbitrary wedding rows (and squat a slug before a customer claims it).
 create or replace function public.claim_slug(p_slug text, p_owner uuid default null)
 returns uuid
 language plpgsql security definer set search_path = public
@@ -250,8 +251,15 @@ exception when unique_violation then
   raise exception 'slug already taken: %', p_slug;
 end $$;
 
+-- Supabase's default privileges grant EXECUTE on every new function in schema
+-- public *explicitly to anon and authenticated*. A `revoke ... from public`
+-- therefore does NOT stop anon: it only removes the implicit PUBLIC grant.
+-- Every admin-only function must be revoked from anon by name.
 revoke all on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text), public.claim_slug(text, uuid) from public;
+revoke all on function public.claim_slug(text, uuid) from anon;
+revoke all on function public.is_admin(uuid) from public, anon;
 grant execute on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text) to anon, authenticated;
+grant execute on function public.is_admin(uuid) to authenticated;
 grant execute on function public.claim_slug(text, uuid) to authenticated;
 
 -- ---------- 4. Admin summary view (obeys RLS: admin only) -------------
@@ -270,6 +278,14 @@ select
   coalesce(sum(pax) filter (where rsvp = 'attending'), 0) as people_coming
 from public.guests
 group by wedding_id;
+
+-- A view is a relation, so it inherits the same default privileges as the
+-- tables above: anon would get INSERT/UPDATE/DELETE on it. It only *appears*
+-- safe today because security_invoker makes the underlying guests check fail.
+-- Revoke explicitly and hand admins read-only access.
+revoke all on public.guest_summary from anon;
+revoke insert, update, delete, truncate, references, trigger on public.guest_summary from authenticated;
+grant select on public.guest_summary to authenticated;
 
 -- ---------- 5. Make yourself admin ------------------------------------
 -- a) Dashboard > Authentication > Users > Add user (your email + password)
@@ -317,4 +333,5 @@ as $$
   );
 $$;
 revoke all on function public.am_i_admin(text) from public;
+revoke all on function public.am_i_admin(text) from anon;
 grant execute on function public.am_i_admin(text) to authenticated;

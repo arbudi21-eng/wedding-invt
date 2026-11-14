@@ -63,6 +63,60 @@ ok(!/grant execute on function[^;]*claim_slug[^;]*to anon/.test(sql), 'claim_slu
 ok(/grant execute on function public\.claim_slug\(text, uuid\) to authenticated/.test(sql), 'claim_slug is admin-only');
 
 console.log('');
+console.log('=== grant surface (anon must not reach admin paths) ===');
+
+// Supabase's default privileges grant EXECUTE on every new function in schema
+// public *explicitly to anon*, so `revoke ... from public` does not stop anon.
+// Each admin-only function needs a revoke that names anon (and PUBLIC where the
+// implicit grant would otherwise survive).
+const adminOnlyFunctions = [
+  ['claim_slug(text, uuid)', /revoke all on function public\.claim_slug\(text, uuid\) from [^;]*\banon\b/i],
+  ['is_admin(uuid)', /revoke all on function public\.is_admin\(uuid\) from [^;]*\banon\b/i],
+  ['am_i_admin(text)', /revoke all on function public\.am_i_admin\(text\) from [^;]*\banon\b/i]
+];
+for (const [name, re] of adminOnlyFunctions) {
+  ok(re.test(sql), 'anon is explicitly revoked from ' + name);
+}
+
+// is_admin also needs the implicit PUBLIC grant removed, or revoking anon alone
+// leaves the function callable by everyone.
+ok(/revoke all on function public\.is_admin\(uuid\) from [^;]*\bpublic\b/i.test(sql),
+  'is_admin drops the implicit PUBLIC execute grant');
+
+// The guest_summary view is created after the table revokes, so it inherits
+// default privileges: anon would hold INSERT/UPDATE/DELETE on it.
+ok(/revoke all on public\.guest_summary from anon/i.test(sql), 'anon has no grant on the guest_summary view');
+ok(/revoke insert, update, delete, truncate, references, trigger on public\.guest_summary from authenticated/i.test(sql),
+  'guest_summary is read-only even for admins');
+ok(/grant select on public\.guest_summary to authenticated/i.test(sql), 'admins can still read guest_summary');
+
+// Locking down admin paths must not lock out guests.
+ok(/grant execute on function[^;]*public\.open_invitation\(text, text\)[^;]*to anon/.test(sql), 'guests can still open an invitation');
+ok(/grant execute on function[^;]*public\.submit_rsvp\(text, text, text, integer\)[^;]*to anon/.test(sql), 'guests can still RSVP');
+ok(/grant execute on function[^;]*public\.submit_wish\(text, text, text\)[^;]*to anon/.test(sql), 'guests can still leave a wish');
+
+console.log('');
+console.log('=== frozen baseline matches the schema ===');
+
+// database/0001_baseline.sql is what gets pasted into a real Supabase project.
+// Guard against fixing one copy and forgetting the other.
+const baselinePath = path.join(__dirname, 'database', '0001_baseline.sql');
+const baselineMarker = '-- ---- BEGIN FROZEN BASELINE ----';
+if (!fs.existsSync(baselinePath)) {
+  ok(false, 'database/0001_baseline.sql exists');
+} else {
+  const baselineRaw = fs.readFileSync(baselinePath, 'utf8');
+  const at = baselineRaw.indexOf(baselineMarker);
+  ok(at !== -1, 'baseline carries the frozen-baseline marker');
+  if (at !== -1) {
+    const norm = s => s.replace(/\r\n/g, '\n').trim();
+    const body = norm(baselineRaw.slice(at + baselineMarker.length));
+    ok(body === norm(sqlRaw),
+      'baseline body is identical to templates/wedding_schema.sql (update both, or add database/0002_*.sql)');
+  }
+}
+
+console.log('');
 console.log('=== call sites match the schema ===');
 
 ok(!/from\('wishes'\)\.select/.test(core), 'guest site does not select the wishes table directly');

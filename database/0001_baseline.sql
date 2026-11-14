@@ -1,0 +1,352 @@
+-- =====================================================================
+-- FROZEN BASELINE — database/0001_baseline.sql
+--
+-- Validated 2026-11-14 on PostgreSQL 16.16 (Docker `postgres:16`) against a
+-- Supabase shim that reproduces its roles (anon/authenticated/service_role),
+-- auth schema, auth.uid() and default privileges. 44 behavioural assertions
+-- pass; see database/test/.
+--
+-- Apply with: Supabase dashboard > SQL Editor > paste this whole file.
+-- Idempotent: re-running drops and recreates policies, functions and the view.
+--
+-- Source of truth is templates/wedding_schema.sql. Everything below the
+-- marker must stay identical to it — `node test-schema.js` enforces that.
+-- Future schema changes go in database/0002_*.sql, never in this file.
+-- ---- BEGIN FROZEN BASELINE ----
+-- =====================================================================
+-- Wedding invitation: Supabase (PostgreSQL) schema
+-- Run the whole file once in: Supabase dashboard > SQL Editor > New query
+--
+-- Security model (one project can host many weddings)
+--   * Each wedding gets its own slug (e.g. amara-dewa-k7x2q9).
+--   * Guests are anonymous. They never touch tables: every read and write
+--     goes through an RPC that takes the slug and their secret `code`.
+--   * Row-level security isolates rows per wedding_id. An admin only sees
+--     rows for weddings listed against their user in `admins`.
+--   * Phone numbers, guest lists and settings are admin-only.
+--   * Anyone can read the visible wishes of one wedding via list_wishes().
+-- =====================================================================
+
+-- ---------- 1. Tables -------------------------------------------------
+
+-- Each deployed invitation gets one row here, keyed by its unique slug.
+create table if not exists public.weddings (
+  id        uuid primary key default gen_random_uuid(),
+  slug      text not null unique,
+  owner     uuid references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+-- Which user may administer which wedding. The pair is the key, so one person
+-- can run several invitations without seeing anyone else's guest list.
+create table if not exists public.admins (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  wedding_id uuid not null references public.weddings(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, wedding_id)
+);
+
+create table if not exists public.guests (
+  id            uuid primary key default gen_random_uuid(),
+  wedding_id    uuid not null references public.weddings(id) on delete cascade,
+  code          text not null unique
+                default substr(replace(gen_random_uuid()::text, '-', ''), 1, 10),
+  name          text not null check (char_length(name) between 1 and 120),
+  phone         text not null check (phone ~ '^[0-9]{8,16}$'),   -- 62812..., no +
+  lang          text not null default 'id' check (lang in ('id', 'en')),
+  sent_status   text not null default 'new' check (sent_status in ('new', 'sent')),
+  sent_at       timestamptz,
+  opened_at     timestamptz,                                      -- first open
+  last_opened_at timestamptz,
+  open_count    integer not null default 0,
+  rsvp          text not null default 'pending'
+                check (rsvp in ('pending', 'attending', 'declined')),
+  pax           integer not null default 1 check (pax between 0 and 20),
+  rsvp_at       timestamptz,
+  created_at    timestamptz not null default now()
+);
+
+create table if not exists public.wishes (
+  id          uuid primary key default gen_random_uuid(),
+  wedding_id  uuid not null references public.weddings(id) on delete cascade,
+  guest_id    uuid not null unique references public.guests(id) on delete cascade,
+  name        text not null,                                      -- copied from guest
+  message     text not null check (char_length(message) between 1 and 500),
+  is_visible  boolean not null default true,                      -- admin can hide
+  created_at  timestamptz not null default now()
+);
+
+-- Per-wedding site settings (couple's WhatsApp, templates, page address).
+-- Keyed by wedding so one shared Supabase project can serve many weddings.
+create table if not exists public.settings (
+  wedding_id   uuid primary key references public.weddings(id) on delete cascade,
+  couple_phone text not null default '6281234567890',
+  base_url     text not null default 'https://your-site.netlify.app',
+  template_en  text not null default 'Dear {name}, with joy Amara & Dewa invite you to our wedding on 13 March 2027. Your personal invitation: {link}',
+  template_id  text not null default 'Yth. {name}, dengan sukacita Amara & Dewa mengundang Anda ke pernikahan kami pada 13 Maret 2027. Undangan pribadi Anda: {link}'
+);
+
+-- Every wedding gets its settings row automatically, and existing rows are
+-- backfilled, so `settings` is never missing for a live invitation.
+create or replace function public.seed_wedding_settings()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  insert into public.settings (wedding_id) values (new.id)
+  on conflict (wedding_id) do nothing;
+  return new;
+end $$;
+
+drop trigger if exists weddings_seed_settings on public.weddings;
+create trigger weddings_seed_settings after insert on public.weddings
+for each row execute function public.seed_wedding_settings();
+
+insert into public.settings (wedding_id)
+select id from public.weddings
+on conflict (wedding_id) do nothing;
+create index if not exists guests_rsvp_idx on public.guests (rsvp);
+create index if not exists guests_wedding_idx on public.guests (wedding_id);
+create index if not exists wishes_visible_idx on public.wishes (is_visible, created_at desc);
+create index if not exists wishes_wedding_idx on public.wishes (wedding_id);
+
+-- ---------- 2. Admin helper + row level security ----------------------
+
+-- True only when the signed-in user is listed as an admin for this wedding.
+drop function if exists public.is_admin();
+
+create or replace function public.is_admin(p_wedding uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.admins
+    where user_id = auth.uid() and wedding_id = p_wedding
+  );
+$$;
+
+-- Guests never read tables directly. Every public path is an RPC that takes
+-- the slug explicitly, because PostgREST cannot set `current_setting`.
+
+alter table public.weddings   enable row level security;
+alter table public.admins     enable row level security;
+alter table public.guests     enable row level security;
+alter table public.wishes     enable row level security;
+alter table public.settings   enable row level security;
+
+-- Admin access is scoped per wedding: a signed-in user can only touch rows
+-- belonging to a wedding they are registered for.
+drop policy if exists admins_self_read on public.admins;
+create policy admins_self_read on public.admins for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists weddings_admin on public.weddings;
+create policy weddings_admin on public.weddings for select to authenticated
+  using (public.is_admin(id));
+
+drop policy if exists guests_admin on public.guests;
+create policy guests_admin on public.guests for all to authenticated
+  using (public.is_admin(wedding_id)) with check (public.is_admin(wedding_id));
+
+drop policy if exists wishes_admin on public.wishes;
+create policy wishes_admin on public.wishes for all to authenticated
+  using (public.is_admin(wedding_id)) with check (public.is_admin(wedding_id));
+
+drop policy if exists settings_admin on public.settings;
+create policy settings_admin on public.settings for all to authenticated
+  using (public.is_admin(wedding_id)) with check (public.is_admin(wedding_id));
+
+-- Anonymous visitors get nothing directly. In particular the old
+-- `wishes` anon policy matched on current_setting('app.slug'), which
+-- PostgREST never sets, so the guest wish wall silently returned zero rows.
+-- Guests read wishes through list_wishes(p_slug) instead.
+revoke all on public.guests, public.settings, public.admins, public.weddings, public.wishes from anon;
+
+-- ---------- 3. Guest-facing functions (the only way guests write) -----
+
+-- Called when the invitation page loads. Records the open, returns safe fields.
+-- p_slug is the wedding slug; p_code is the guest's personal code.
+create or replace function public.open_invitation(p_slug text, p_code text)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+declare g public.guests; wid uuid;
+begin
+  select id into wid from public.weddings where slug = p_slug limit 1;
+  if not found then return null; end if;
+
+  update public.guests
+     set opened_at      = coalesce(opened_at, now()),
+         last_opened_at = now(),
+         open_count     = open_count + 1
+   where code = p_code and wedding_id = wid
+   returning * into g;
+  if not found then return null; end if;
+
+  return json_build_object(
+    'name', g.name, 'lang', g.lang, 'rsvp', g.rsvp, 'pax', g.pax,
+    'wish', (select w.message from public.wishes w where w.guest_id = g.id),
+    'couple_phone', (select couple_phone from public.settings where wedding_id = wid)
+  );
+end $$;
+
+create or replace function public.submit_rsvp(p_slug text, p_code text, p_rsvp text, p_pax integer)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+declare g public.guests; wid uuid;
+begin
+  if p_rsvp not in ('attending', 'declined') then
+    raise exception 'invalid rsvp';
+  end if;
+  select id into wid from public.weddings where slug = p_slug limit 1;
+  if not found then raise exception 'unknown wedding'; end if;
+
+  update public.guests
+     set rsvp = p_rsvp,
+         pax = case when p_rsvp = 'attending' then greatest(1, least(coalesce(p_pax, 1), 20)) else 0 end,
+         rsvp_at = now()
+   where code = p_code and wedding_id = wid
+   returning * into g;
+  if not found then raise exception 'unknown code'; end if;
+  return json_build_object('rsvp', g.rsvp, 'pax', g.pax);
+end $$;
+
+-- One wish per guest; sending again replaces it.
+create or replace function public.submit_wish(p_slug text, p_code text, p_message text)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+declare g public.guests; m text := btrim(coalesce(p_message, '')); wid uuid;
+begin
+  if char_length(m) = 0 or char_length(m) > 500 then
+    raise exception 'message must be 1 to 500 characters';
+  end if;
+  select id into wid from public.weddings where slug = p_slug limit 1;
+  if not found then raise exception 'unknown wedding'; end if;
+
+  select * into g from public.guests where code = p_code and wedding_id = wid;
+  if not found then raise exception 'unknown code'; end if;
+
+  insert into public.wishes (wedding_id, guest_id, name, message)
+  values (wid, g.id, g.name, m)
+  on conflict (guest_id)
+  do update set message = excluded.message, created_at = now();
+  return json_build_object('ok', true);
+end $$;
+
+-- The guest wish wall. Returns only visible wishes for the given wedding,
+-- so two invitations sharing one database can never see each other's wishes.
+create or replace function public.list_wishes(p_slug text)
+returns table (name text, message text, created_at timestamptz)
+language sql stable security definer set search_path = public
+as $$
+  select w.name, w.message, w.created_at
+  from public.wishes w
+  join public.weddings d on d.id = w.wedding_id
+  where d.slug = p_slug and w.is_visible
+  order by w.created_at desc
+  limit 50;
+$$;
+
+-- Claim a slug: inserts into weddings and fails on duplicates.
+-- Admin-only: exposed to anon it would let anyone with the public anon key
+-- insert arbitrary wedding rows (and squat a slug before a customer claims it).
+create or replace function public.claim_slug(p_slug text, p_owner uuid default null)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare new_id uuid;
+begin
+  insert into public.weddings (slug, owner)
+  values (p_slug, coalesce(p_owner, auth.uid()))
+  returning id into new_id;
+  return new_id;
+exception when unique_violation then
+  raise exception 'slug already taken: %', p_slug;
+end $$;
+
+-- Supabase's default privileges grant EXECUTE on every new function in schema
+-- public *explicitly to anon and authenticated*. A `revoke ... from public`
+-- therefore does NOT stop anon: it only removes the implicit PUBLIC grant.
+-- Every admin-only function must be revoked from anon by name.
+revoke all on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text), public.claim_slug(text, uuid) from public;
+revoke all on function public.claim_slug(text, uuid) from anon;
+revoke all on function public.is_admin(uuid) from public, anon;
+grant execute on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text) to anon, authenticated;
+grant execute on function public.is_admin(uuid) to authenticated;
+grant execute on function public.claim_slug(text, uuid) to authenticated;
+
+-- ---------- 4. Admin summary view (obeys RLS: admin only) -------------
+
+-- Grouped by wedding so the console's per-wedding dashboard never totals
+-- guests from another couple sharing the same database.
+create or replace view public.guest_summary with (security_invoker = true) as
+select
+  wedding_id,
+  count(*)                                              as total_guests,
+  count(*) filter (where sent_status = 'sent')          as sent,
+  count(*) filter (where opened_at is not null)         as opened,
+  count(*) filter (where rsvp = 'attending')            as attending,
+  count(*) filter (where rsvp = 'declined')             as declined,
+  count(*) filter (where rsvp = 'pending')              as waiting,
+  coalesce(sum(pax) filter (where rsvp = 'attending'), 0) as people_coming
+from public.guests
+group by wedding_id;
+
+-- A view is a relation, so it inherits the same default privileges as the
+-- tables above: anon would get INSERT/UPDATE/DELETE on it. It only *appears*
+-- safe today because security_invoker makes the underlying guests check fail.
+-- Revoke explicitly and hand admins read-only access.
+revoke all on public.guest_summary from anon;
+revoke insert, update, delete, truncate, references, trigger on public.guest_summary from authenticated;
+grant select on public.guest_summary to authenticated;
+
+-- ---------- 5. Make yourself admin ------------------------------------
+-- a) Dashboard > Authentication > Users > Add user (your email + password)
+-- b) Register the wedding slug (step 2 of SETUP), then run with your email:
+--
+-- insert into public.admins (user_id, wedding_id)
+-- select u.id, w.id
+--   from auth.users u, public.weddings w
+--  where u.email = 'you@example.com' and w.slug = 'your-slug-abc123';
+
+-- ---------- 6. DUMMY DATA (safe to delete before the real event) ------
+-- To remove later: delete from public.guests where code like 'DEMO%';
+-- Note: dummy data must reference a valid wedding row.
+
+-- insert into public.weddings (slug, owner) values ('demo-wedding-abc123', null)
+-- on conflict (slug) do nothing;
+
+-- insert into public.guests (wedding_id, code, name, phone, lang, sent_status, sent_at, opened_at, last_opened_at, open_count, rsvp, pax, rsvp_at) values
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000001', 'Budi Santoso',   '6281234500001', 'id', 'sent', now() - interval '3 days', now() - interval '2 days', now() - interval '1 day', 3, 'attending', 2, now() - interval '2 days'),
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000002', 'Jane Lee',       '61400000002',   'en', 'sent', now() - interval '3 days', now() - interval '2 days', now() - interval '2 days', 1, 'attending', 1, now() - interval '2 days'),
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000003', 'Siti Rahayu',    '6281234500003', 'id', 'sent', now() - interval '2 days', now() - interval '1 day',  now() - interval '1 day',  2, 'declined',  0, now() - interval '1 day'),
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000004', 'Keluarga Wijaya','6281234500004', 'id', 'sent', now() - interval '1 day',  now() - interval '5 hours', now() - interval '5 hours', 1, 'pending',   1, null),
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000005', 'Michael Tan',    '6598760005',    'en', 'sent', now() - interval '1 day',  null, null, 0, 'pending', 1, null),
+--  ((select id from public.weddings where slug = 'demo-wedding-abc123'), 'DEMO000006', 'Ayu Lestari',    '6281234500006', 'id', 'new',  null,                      null, null, 0, 'pending', 1, null)
+-- on conflict (code) do nothing;
+
+-- insert into public.wishes (wedding_id, guest_id, name, message)
+-- select (select id from public.weddings where slug = 'demo-wedding-abc123'), id, name, 'Sample wish. Selamat menempuh hidup baru, semoga bahagia selalu!'
+--   from public.guests where code = 'DEMO000001'
+-- on conflict (guest_id) do nothing;
+
+-- Admin check without recursion. Takes the slug so the console can verify it
+-- is an admin *of this invitation* and not just of some other couple's.
+drop function if exists public.am_i_admin();
+
+create or replace function public.am_i_admin(p_slug text)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.admins a
+    join public.weddings w on w.id = a.wedding_id
+    where a.user_id = auth.uid() and w.slug = p_slug
+  );
+$$;
+revoke all on function public.am_i_admin(text) from public;
+revoke all on function public.am_i_admin(text) from anon;
+grant execute on function public.am_i_admin(text) to authenticated;
