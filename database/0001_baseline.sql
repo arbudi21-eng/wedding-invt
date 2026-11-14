@@ -273,6 +273,9 @@ end $$;
 revoke all on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text), public.claim_slug(text, uuid) from public;
 revoke all on function public.claim_slug(text, uuid) from anon;
 revoke all on function public.is_admin(uuid) from public, anon;
+-- Trigger functions cannot be invoked directly, but strip the default grant so
+-- the live privilege matrix stays honest.
+revoke all on function public.seed_wedding_settings() from public, anon, authenticated;
 grant execute on function public.open_invitation(text, text), public.submit_rsvp(text, text, text, integer), public.submit_wish(text, text, text), public.list_wishes(text) to anon, authenticated;
 grant execute on function public.is_admin(uuid) to authenticated;
 grant execute on function public.claim_slug(text, uuid) to authenticated;

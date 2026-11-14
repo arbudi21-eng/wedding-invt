@@ -83,6 +83,11 @@ for (const [name, re] of adminOnlyFunctions) {
 ok(/revoke all on function public\.is_admin\(uuid\) from [^;]*\bpublic\b/i.test(sql),
   'is_admin drops the implicit PUBLIC execute grant');
 
+// A trigger function can never be called directly, but the default EXECUTE
+// grant still shows up in a privilege audit as a false positive.
+ok(/revoke all on function public\.seed_wedding_settings\(\) from [^;]*\banon\b/i.test(sql),
+  'seed_wedding_settings is not callable by anon');
+
 // The guest_summary view is created after the table revokes, so it inherits
 // default privileges: anon would hold INSERT/UPDATE/DELETE on it.
 ok(/revoke all on public\.guest_summary from anon/i.test(sql), 'anon has no grant on the guest_summary view');

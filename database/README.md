@@ -13,6 +13,12 @@ It was validated on 2026-11-14 against PostgreSQL 16.16 with a Supabase shim
 (see `test/`), covering 49 assertions: schema install, RLS isolation between two
 admins, guest RPC behaviour, and the grant surface.
 
+The same file was then applied to a live Supabase project (PostgreSQL 17.11),
+re-applied to confirm idempotency, and passed all 49 assertions there. Test
+weddings, guests and auth users were deleted afterwards, and the live grant
+matrix was audited: `anon` can execute only `open_invitation`, `submit_rsvp`,
+`submit_wish` and `list_wishes`, and holds no privilege on any table or view.
+
 `templates/wedding_schema.sql` remains the source of truth during development.
 `database/0001_baseline.sql` must stay identical below its
 `BEGIN FROZEN BASELINE` marker — `node test-schema.js` fails if they drift.
@@ -63,15 +69,22 @@ running on failure so you can inspect it; `docker rm -f wg-pg` cleans up.
 
 ### What it does **not** prove
 
-The shim reproduces Postgres-level behaviour only. Before charging money, still
-verify on a scratch cloud project:
+Already proven on the live project: schema install and re-install, the role
+grant matrix, and RLS isolation with two admins.
 
-- GoTrue issues the JWTs that `auth.uid()` reads (the shim fakes the GUC).
-- PostgREST exposes the RPCs at the URLs the client actually calls.
-- Project-level settings: connection pooler mode, statement timeout, extension
-  availability, and that the project is on a paid plan (free projects pause).
-- `security_invoker` views require PostgreSQL 15+ — fine on current Supabase,
-  but confirm the project's version.
+Still unproven before charging money:
+
+- GoTrue issues the JWTs that `auth.uid()` reads. The harness and the cloud run
+  both set the claim GUC by hand; no real JWT was exchanged.
+- PostgREST exposes the RPCs at the URLs the client actually calls, with the
+  project's anon key. Needs the anon key — it is safe to share, unlike the
+  database password.
+- Transaction pooler mode (port 6543). The suites use session mode (5432)
+  because `SET ROLE` must survive across statements. The app will use 6543, so
+  confirm one RPC round-trip through it during Phase 1.
+- Project-level settings: statement timeout and that the project is on a paid
+  plan (free projects pause, and a paused project breaks every live RSVP).
+- `security_invoker` views require PostgreSQL 15+ — confirmed on 17.11.
 
 ## Two real bugs this harness caught
 

@@ -53,10 +53,10 @@ gets correct social previews for nothing.
 
 ### Must fix before launch
 
-1. **The SQL has never been executed on a hosted Supabase project.** Executed
-   and hardened locally on real PostgreSQL 16 (see `database/`), but the cloud
-   run is still outstanding: GoTrue, PostgREST, the pooler and project settings
-   are not covered by the shim.
+1. **The SQL has only been verified at the Postgres layer on a hosted project.**
+   It installs, re-installs, and enforces its security model on a real Supabase
+   project (see `database/README.md`). What remains unproven is the HTTP path:
+   PostgREST and GoTrue with a real anon key and real JWTs.
 2. `weddings` has no owner column. Ownership is currently expressed only
    through `admins`.
 3. Slug generation dedupes against an in-memory `Set` — meaningless. Uniqueness
@@ -236,8 +236,18 @@ Executed 2026-11-14 against PostgreSQL 16.16 under a Supabase shim (roles,
 **Gate (met locally):** `select * from public.guest_summary;` returns one
 wedding's numbers only, with two weddings in the DB.
 
-**Still open:** run `database/0001_baseline.sql` on a scratch cloud project and
-repeat the RPC checks through PostgREST with a real JWT. Blocked on credentials.
+**Cloud run (2026-11-14):** `database/0001_baseline.sql` applied to a real
+Supabase project (PostgreSQL 17.11) with exit 0 and re-applied to prove
+idempotency, and all 49 assertions passed there too. Test weddings, guests and
+users were then deleted — the project is empty again. The live grant matrix was
+audited afterwards: only `open_invitation`, `submit_rsvp`, `submit_wish` and
+`list_wishes` are executable by `anon`; `claim_slug`, `is_admin` and
+`am_i_admin` are authenticated-only; `anon` has no privilege on any table or on
+`guest_summary`.
+
+**Still open:** PostgREST-over-HTTP verification with a real JWT (needs the
+project's anon key), plus the pooler and project-setting checks listed in
+`database/README.md`.
 
 ### Phase 1 — Repository + app shell (2–3 days)
 
@@ -368,7 +378,8 @@ Break-even at ~Rp 150k per invitation is low single-digit sales per month.
 
 Charge money only when all of these are true:
 
-- [ ] `wedding_schema.sql` runs clean on a fresh project, verified twice
+- [x] `wedding_schema.sql` runs clean on a fresh project, verified twice
+      (local harness + live Supabase project, both re-run)
 - [ ] Ten invitations published and unpublished end-to-end by you alone
 - [ ] One real wedding with 100+ guests, zero manual SQL during the event
 - [ ] Two accounts cannot see each other's data (tested, not eyeballed)
@@ -383,7 +394,7 @@ Charge money only when all of these are true:
 ## 10. Sequence summary
 
 ```
-Phase 0  1–2d   run the SQL for real          ← DONE locally, cloud pending
+Phase 0  1–2d   run the SQL for real          ← DONE (local + live project)
 Phase 1  2–3d   app shell + auth + drafts
 Phase 2  4–6d   builder + R2 + publish        ← the actual product
 Phase 3  3–4d   payments + entitlements
