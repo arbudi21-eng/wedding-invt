@@ -1,12 +1,37 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { createDraft } from '@/app/actions/weddings';
 import { DESIGNS } from '@/lib/designs';
 
+const PICKED_EVENT = 'studio:design-pick';
+
 export default function NewInvitationForm() {
   const [state, formAction, pending] = useActionState(createDraft, { errors: {} });
+  const [design, setDesign] = useState(DESIGNS[0].id);
   const errors = state?.errors || {};
+
+  useEffect(() => {
+    const sync = (event) => {
+      if (typeof event.detail === 'string' && DESIGNS.some((d) => d.id === event.detail)) {
+        setDesign(event.detail);
+      }
+    };
+    window.addEventListener(PICKED_EVENT, sync);
+    return () => window.removeEventListener(PICKED_EVENT, sync);
+  }, []);
+
+  const previewInvitation = (event) => {
+    event.preventDefault();
+    const form = event.currentTarget.form;
+    const data = new FormData(form);
+    const params = new URLSearchParams();
+    for (const [key, value] of data.entries()) {
+      const s = String(value).trim();
+      if (s) params.set(key, s);
+    }
+    window.open(`/preview/new?${params.toString()}`, '_blank', 'noopener');
+  };
 
   return (
     <form action={formAction} className="form">
@@ -56,19 +81,23 @@ export default function NewInvitationForm() {
 
         <div className="field">
           <label htmlFor="new-design">Design</label>
-          <select id="new-design" name="design" defaultValue={DESIGNS[0].id}>
-            {DESIGNS.map((design) => (
-              <option key={design.id} value={design.id}>
-                {design.name}
+          <select id="new-design" name="design" value={design} onChange={(event) => setDesign(event.target.value)}>
+            {DESIGNS.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
               </option>
             ))}
           </select>
+          <span className="hint">Pick one in the gallery above — the dropdown follows your selection.</span>
         </div>
       </div>
 
-      <div>
+      <div className="hero-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
         <button className="button" type="submit" disabled={pending}>
           {pending ? 'Creating draft…' : 'Create draft'}
+        </button>
+        <button className="button secondary" type="button" onClick={previewInvitation}>
+          Preview design
         </button>
       </div>
     </form>

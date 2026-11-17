@@ -12,18 +12,18 @@ export default function SiteHeader({ email }) {
             <span className="who" title={email}>
               {email}
             </span>
-            <Link href="/dashboard">Dashboard</Link>
+            <Link href="/dashboard">Dasbor</Link>
             <form action="/auth/signout" method="post">
               <button type="submit" className="link-button">
-                Sign out
+                Keluar
               </button>
             </form>
           </>
         ) : (
           <>
-            <Link href="/login">Sign in</Link>
+            <Link href="/login">Masuk</Link>
             <Link className="button small" href="/signup">
-              Create account
+              Buat akun
             </Link>
           </>
         )}

@@ -7,14 +7,14 @@ export default function DeleteDraftButton({ id, title }) {
     <form
       action={deleteDraft}
       onSubmit={(event) => {
-        if (!window.confirm(`Delete “${title}”? This cannot be undone.`)) {
+        if (!window.confirm(`Hapus “${title}” beserta semua foto-fotonya? Anda tidak bisa membatalkannya.`)) {
           event.preventDefault();
         }
       }}
     >
       <input type="hidden" name="id" value={id} />
       <button className="button danger small" type="submit">
-        Delete
+        Hapus
       </button>
     </form>
   );

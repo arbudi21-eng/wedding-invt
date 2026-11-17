@@ -66,11 +66,41 @@ export async function saveDraft(prevState, formData) {
   const { supabase, claims } = await getClaims();
   if (!claims?.sub) return { errors: {}, error: 'Your session expired. Sign in again.' };
 
+  // Photos/uploads are owned by the stored content, never submitted by the
+  // form — read the current row first and carry them forward, or this save
+  // would wipe every uploaded photo and video.
+  const { data: existing, error: readError } = await supabase
+    .from('weddings')
+    .select('content')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (readError) return { errors: {}, error: friendlyDbError(readError) };
+  if (!existing) return { errors: {}, error: 'Invitation not found.' };
+
+  const merged = {
+    ...parsed.content,
+    photos:
+      existing.content && typeof existing.content === 'object'
+        ? existing.content.photos || parsed.content.photos
+        : parsed.content.photos,
+    video: {
+      ...(parsed.content && typeof parsed.content === 'object' ? parsed.content.video : {}),
+      src:
+        existing.content &&
+        typeof existing.content === 'object' &&
+        existing.content.video &&
+        typeof existing.content.video === 'object'
+          ? existing.content.video.src || ''
+          : '',
+    },
+  };
+
   // RLS scopes this to the owner; `maybeSingle()` turns "not yours" and
   // "does not exist" into the same safe answer.
   const { data, error } = await supabase
     .from('weddings')
-    .update({ content: parsed.content, design: parsed.design })
+    .update({ content: merged, design: parsed.design })
     .eq('id', id)
     .select('id, updated_at')
     .maybeSingle();
@@ -90,6 +120,15 @@ export async function deleteDraft(formData) {
   if (UUID_RE.test(id)) {
     const { supabase, claims } = await getClaims();
     if (claims?.sub) {
+      // Remove the draft's storage folder before dropping the row (the row
+      // delete cascades to dependents but not to storage objects).
+      const prefix = `${claims.sub}/${id}/`;
+      const BUCKET = 'wedding-photos-2';
+      const { data: objects } = await supabase.storage.from(BUCKET).list(prefix, { limit: 100 });
+      if (objects && objects.length > 0) {
+        const paths = objects.map((object) => `${prefix}${object.name}`);
+        await supabase.storage.from(BUCKET).remove(paths);
+      }
       await supabase.from('weddings').delete().eq('id', id);
     }
   }

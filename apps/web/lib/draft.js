@@ -126,6 +126,30 @@ export function normalizeContent(raw) {
   const captions = object(c.captions);
   const video = object(c.video);
   const photos = object(c.photos);
+  const txt = object(c.text);
+  const cpl = object(c.couple);
+  const heroEn = object(object(txt.hero).en);
+  const heroId = object(object(txt.hero).id);
+  const introEn = object(object(txt.intro).en);
+  const introId = object(object(txt.intro).id);
+  const gm = object(txt.giftMessage);
+  const giftMsgEn = cleanMultiline(gm.en, 600);
+  const giftMsgId = cleanMultiline(gm.id, 600);
+  const manEn = object(object(cpl.man).en);
+  const manId = object(object(cpl.man).id);
+  const womanEn = object(object(cpl.woman).en);
+  const womanId = object(object(cpl.woman).id);
+  const storyEn = stringList(story.en);
+  const storyId = stringList(story.id);
+  const capsEn = stringList(captions.en);
+  const capsId = stringList(captions.id);
+  const dressEn = cleanMultiline(dress.en, 600);
+  const dressId = cleanMultiline(dress.id, 600);
+
+  // Indonesian-only product: an empty half inherits the other half so old
+  // drafts filled in either language still render as Indonesian.
+  const mirror = (a, b) => (a.length ? a : b);
+  const mirrorText = (a, b) => a || b;
 
   return {
     version: 1,
@@ -141,16 +165,16 @@ export function normalizeContent(raw) {
       reception: cleanTime(schedule.reception),
     },
     dress: {
-      en: cleanMultiline(dress.en, 600),
-      id: cleanMultiline(dress.id, 600),
+      en: mirrorText(dressEn, dressId),
+      id: mirrorText(dressId, dressEn),
     },
     story: {
-      en: stringList(story.en),
-      id: stringList(story.id),
+      en: mirror(storyEn, storyId),
+      id: mirror(storyId, storyEn),
     },
     captions: {
-      en: stringList(captions.en),
-      id: stringList(captions.id),
+      en: mirror(capsEn, capsId),
+      id: mirror(capsId, capsEn),
     },
     gifts: Array.isArray(c.gifts)
       ? c.gifts
@@ -162,14 +186,63 @@ export function normalizeContent(raw) {
           }))
           .filter((gift) => gift.bank && gift.no)
       : [],
-    video: { link: cleanUrl(video.link) },
+    video: { link: cleanUrl(video.link), src: cleanUrl(video.src) },
     host: cleanLine(c.host, 80),
     locale: c.locale === 'en' ? 'en' : 'id',
+    text: {
+      hero: {
+        en: {
+          h: mirrorText(cleanMultiline(heroEn.h, 200), cleanMultiline(heroId.h, 200)),
+          hp: mirrorText(cleanMultiline(heroEn.hp, 400), cleanMultiline(heroId.hp, 400)),
+        },
+        id: {
+          h: mirrorText(cleanMultiline(heroId.h, 200), cleanMultiline(heroEn.h, 200)),
+          hp: mirrorText(cleanMultiline(heroId.hp, 400), cleanMultiline(heroEn.hp, 400)),
+        },
+      },
+      intro: {
+        en: {
+          h: mirrorText(cleanMultiline(introEn.h, 120), cleanMultiline(introId.h, 120)),
+          p: mirrorText(cleanMultiline(introEn.p, 600), cleanMultiline(introId.p, 600)),
+        },
+        id: {
+          h: mirrorText(cleanMultiline(introId.h, 120), cleanMultiline(introEn.h, 120)),
+          p: mirrorText(cleanMultiline(introId.p, 600), cleanMultiline(introEn.p, 600)),
+        },
+      },
+      giftMessage: {
+        en: mirrorText(giftMsgEn, giftMsgId),
+        id: mirrorText(giftMsgId, giftMsgEn),
+      },
+    },
+    couple: {
+      man: {
+        en: {
+          p: mirrorText(cleanMultiline(manEn.p, 600), cleanMultiline(manId.p, 600)),
+          parents: mirrorText(cleanMultiline(manEn.parents, 200), cleanMultiline(manId.parents, 200)),
+        },
+        id: {
+          p: mirrorText(cleanMultiline(manId.p, 600), cleanMultiline(manEn.p, 600)),
+          parents: mirrorText(cleanMultiline(manId.parents, 200), cleanMultiline(manEn.parents, 200)),
+        },
+      },
+      woman: {
+        en: {
+          p: mirrorText(cleanMultiline(womanEn.p, 600), cleanMultiline(womanId.p, 600)),
+          parents: mirrorText(cleanMultiline(womanEn.parents, 200), cleanMultiline(womanId.parents, 200)),
+        },
+        id: {
+          p: mirrorText(cleanMultiline(womanId.p, 600), cleanMultiline(womanEn.p, 600)),
+          parents: mirrorText(cleanMultiline(womanId.parents, 200), cleanMultiline(womanEn.parents, 200)),
+        },
+      },
+    },
     // Phase 2 replaces these with object-storage paths; the shape is stable.
     photos: {
       cover: text(photos.cover),
       man: text(photos.man),
       woman: text(photos.woman),
+      hero: text(photos.hero),
       story: stringList(photos.story),
       album: stringList(photos.album),
     },
@@ -215,19 +288,59 @@ export function draftFromForm(formData) {
       ceremony: cleanTime(formData.get('ceremony')),
       reception: cleanTime(formData.get('reception')),
     },
-    dress: {
-      en: cleanMultiline(formData.get('dressEn'), 600),
-      id: cleanMultiline(formData.get('dressId'), 600),
-    },
-    story: {
-      en: cleanLines(formData.get('storyEn')),
-      id: cleanLines(formData.get('storyId')),
-    },
-    captions: { en: [], id: [] },
-    gifts: [],
-    video: { link: '' },
+    dress: (() => {
+      const en = cleanMultiline(formData.get('dressEn'), 600);
+      const id = cleanMultiline(formData.get('dressId'), 600);
+      return { en: en || id, id: id || en };
+    })(),
+    story: (() => {
+      const en = cleanLines(formData.get('storyEn'));
+      const id = cleanLines(formData.get('storyId'));
+      return { en: en.length ? en : id, id: id.length ? id : en };
+    })(),
+    captions: (() => {
+      const en = cleanLines(formData.get('capsEn'), 6);
+      const id = cleanLines(formData.get('capsId'), 6);
+      return { en: en.length ? en : id, id: id.length ? id : en };
+    })(),
+    gifts: [1, 2, 3]
+      .map((n) => ({
+        bank: cleanLine(formData.get(`gift${n}Bank`), 60),
+        name: cleanLine(formData.get(`gift${n}Name`), 80),
+        no: cleanLine(formData.get(`gift${n}No`), 40),
+      }))
+      .filter((gift) => gift.bank && gift.no),
+    video: { link: cleanUrl(formData.get('videoLink')), src: '' },
     host: cleanLine(formData.get('host'), 80),
     locale,
+    text: (() => {
+      const text = (enKey, idKey, max) => {
+        const en = cleanMultiline(formData.get(enKey), max);
+        const id = cleanMultiline(formData.get(idKey), max);
+        return { en: en || id, id: id || en };
+      };
+      return {
+        hero: { h: text('heroHEn', 'heroHId', 200), hp: text('heroHPEn', 'heroHPId', 400) },
+        intro: { h: text('introHEn', 'introHId', 120), p: text('introPEn', 'introPId', 600) },
+        giftMessage: text('giftMessageEn', 'giftMessageId', 600),
+      };
+    })(),
+    couple: (() => {
+      const partner = (pEn, pId, fEn, fId) => {
+        const pEnVal = cleanMultiline(formData.get(pEn), 600);
+        const pIdVal = cleanMultiline(formData.get(pId), 600);
+        const fEnVal = cleanMultiline(formData.get(fEn), 200);
+        const fIdVal = cleanMultiline(formData.get(fId), 200);
+        return {
+          en: { p: pEnVal || pIdVal, parents: fEnVal || fIdVal },
+          id: { p: pIdVal || pEnVal, parents: fIdVal || fEnVal },
+        };
+      };
+      return {
+        man: partner('manPEn', 'manPId', 'manFEn', 'manFId'),
+        woman: partner('womanPEn', 'womanPId', 'womanFEn', 'womanFId'),
+      };
+    })(),
     photos: { cover: '', man: '', woman: '', story: [], album: [] },
   };
 

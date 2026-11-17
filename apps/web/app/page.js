@@ -2,7 +2,7 @@ import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 
 export const metadata = {
-  title: 'Wedding invitations you build yourself',
+  title: 'Undangan pernikahan yang Anda buat sendiri',
 };
 
 export default function HomePage() {
@@ -12,60 +12,61 @@ export default function HomePage() {
       <main>
         <section className="hero">
           <div>
-            <p className="eyebrow">Wedding invitations, without the agency invoice</p>
-            <h1>Build it yourself. Publish it when it is ready.</h1>
+            <p className="eyebrow">Undangan pernikahan, tanpa biaya agensi</p>
+            <h1>Buat sendiri. Terbitkan saat semuanya siap.</h1>
             <p className="lede">
-              Pick one of 33 designs, write your story, add the venue and schedule, then share a
-              single link. Guests RSVP and leave wishes without installing anything.
+              Pilih satu dari 33 desain, tulis kisah Anda, lengkapi tempat dan jadwal, lalu bagikan
+              satu tautan. Tamu bisa konfirmasi kehadiran dan memberi ucapan langsung dari
+              undangan — tanpa mengunduh aplikasi.
             </p>
             <div className="hero-actions">
               <Link className="button" href="/signup">
-                Start a draft
+                Mulai membuat draf
               </Link>
               <Link className="button secondary" href="/login">
-                Sign in
+                Masuk
               </Link>
             </div>
           </div>
           <aside className="hero-card">
-            <h2>How it works</h2>
+            <h2>Cara kerjanya</h2>
             <ol>
               <li>
-                <strong>Create a draft.</strong> Your invitation lives in your account, not in a
-                browser tab.
+                <strong>Buat draf.</strong> Undangan Anda tersimpan di akun, bukan hilang di tab
+                browser.
               </li>
               <li>
-                <strong>Edit at your pace.</strong> Close the laptop, come back on your phone — the
-                details are still there.
+                <strong>Edit santai.</strong> Tutup laptop, lanjutkan dari ponsel — detailnya tetap
+                ada.
               </li>
               <li>
-                <strong>Publish when ready.</strong> Drafts stay private until you choose to make
-                the link live.
+                <strong>Terbitkan saat siap.</strong> Draf tetap privat sampai Anda membuat
+                tautannya aktif.
               </li>
             </ol>
           </aside>
         </section>
 
-        <section className="feature-grid" aria-label="What you get">
+        <section className="feature-grid" aria-label="Yang Anda dapatkan">
           <article className="feature">
-            <h3>33 designed themes</h3>
-            <p>From editorial neutrals to batik and celestial. Change the design without losing your words.</p>
+            <h3>33 tema desain</h3>
+            <p>Dari editorial netral hingga batik nusantara dan celestial. Ganti desain tanpa mengubah tulisan Anda.</p>
           </article>
           <article className="feature">
-            <h3>Guest list built in</h3>
-            <p>Personal codes, RSVP headcounts and a WhatsApp send button. No spreadsheet juggling.</p>
+            <h3>Daftar tamu tersambung</h3>
+            <p>Kode pribadi, jumlah konfirmasi dan tombol kirim WhatsApp. Tanpa repot spreadsheet.</p>
           </article>
           <article className="feature">
-            <h3>Wishes that stay</h3>
-            <p>Guests can leave a message without an account. You moderate what appears.</p>
+            <h3>Ucapan yang bertahan</h3>
+            <p>Tamu bisa meninggalkan ucapan tanpa membuat akun. Anda menyaring yang tampil.</p>
           </article>
           <article className="feature">
-            <h3>One link, all devices</h3>
-            <p>The invitation is a fast static page, so it still opens on a weak signal at the venue.</p>
+            <h3>Satu tautan, semua perangkat</h3>
+            <p>Undangan adalah halaman cepat dan ringan — tetap terbuka saat sinyal lemah di lokasi acara.</p>
           </article>
         </section>
       </main>
-      <footer className="foot">Wedding Studio · build free, publish when you are ready</footer>
+      <footer className="foot">Wedding Studio · buat gratis, terbitkan saat Anda siap</footer>
     </>
   );
 }

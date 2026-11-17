@@ -44,17 +44,17 @@ export default function LoginForm({ next, initialError }) {
         </div>
 
         <button className="button" type="submit" disabled={pending}>
-          {pending ? 'Signing in…' : 'Sign in'}
+          {pending ? 'Masuk…' : 'Masuk'}
         </button>
       </form>
 
       <div className="divider" style={{ margin: '1.25rem 0' }}>
-        or
+        atau
       </div>
 
       <form action={signInWithGoogle}>
         <button className="button secondary" type="submit" style={{ width: '100%' }}>
-          Continue with Google
+          Lanjutkan dengan Google
         </button>
       </form>
     </>

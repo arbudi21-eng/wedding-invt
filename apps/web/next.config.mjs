@@ -12,6 +12,12 @@ const nextConfig = {
   turbopack: {
     root: path.join(here, '..', '..'),
   },
+  experimental: {
+    serverActions: {
+      // 40 MB cap lets a small video reach the upload action.
+      bodySizeLimit: '40mb',
+    },
+  },
 };
 
 export default nextConfig;

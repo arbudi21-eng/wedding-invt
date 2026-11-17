@@ -6,15 +6,15 @@ export const metadata = {
     template: '%s · Wedding Studio',
   },
   description:
-    'Build your wedding invitation, invite guests by WhatsApp, and publish it when you are ready.',
+    'Buat undangan pernikahan Anda, undang tamu lewat WhatsApp, dan terbitkan saat semuanya siap.',
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <body>
         <a className="skip-link" href="#main">
-          Skip to content
+          Lewati konten
         </a>
         {children}
       </body>

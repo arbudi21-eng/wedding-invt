@@ -4,8 +4,10 @@ import SiteHeader from '@/components/site-header';
 import { getClaims } from '@/lib/supabase/server';
 import { draftTitle, formatDateISO } from '@/lib/draft';
 import { designName } from '@/lib/designs';
+import { pruneStaleDrafts } from '@/lib/cleanup';
 import NewInvitationForm from './new-invitation-form';
 import DeleteDraftButton from './delete-draft-button';
+import DesignBrowser from '@/components/DesignBrowser';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +27,10 @@ export default async function DashboardPage() {
 
   if (!claims?.sub) redirect('/login?next=/dashboard');
 
+  // Sweep abandoned drafts (unpublished for 3+ days): remove their storage
+  // folders and their rows. Best-effort; a failure never blocks the page.
+  const { pruned } = await pruneStaleDrafts();
+
   const { data: weddings, error } = await supabase
     .from('weddings')
     .select('id, slug, design, status, content, created_at, updated_at')
@@ -40,31 +46,46 @@ export default async function DashboardPage() {
     <>
       <SiteHeader email={claims.email} />
       <main>
-        <div className="page-head">
+        {pruned > 0 ? (
+          <section className="alert notice" role="status" style={{ marginBottom: '1.25rem' }}>
+            {pruned} {pruned === 1 ? 'draf lama' : 'draf lama'} yang tidak diterbitkan lebih dari
+            3 hari telah otomatis dihapus beserta foto-fotonya.
+          </section>
+        ) : null}
+
+        <div className="studio-head">
           <div>
-            <p className="eyebrow">Your studio</p>
-            <h1>Invitations</h1>
+            <p className="eyebrow">Studio Anda</p>
+            <h1>Undangan</h1>
           </div>
-          <p className="small muted" style={{ margin: 0 }}>
+          <p className="small muted studio-head-count">
             {drafts.length === 0
-              ? 'No drafts yet'
-              : `${drafts.length} invitation${drafts.length === 1 ? '' : 's'}`}
+              ? 'Belum ada undangan'
+              : `${drafts.length} undangan`}
           </p>
         </div>
+        <p className="muted small" style={{ marginBottom: '1rem' }}>
+          Draf yang tidak diterbitkan dalam <strong>3 hari</strong> akan otomatis dihapus
+          beserta semua foto dan datanya.
+        </p>
 
-        <section className="card" style={{ marginBottom: '1.25rem' }}>
+        <section className="studio-card">
           <div className="section-title">
-            <h2>New invitation</h2>
-            <span>Names are enough to start</span>
+            <h2>Undangan baru</h2>
+            <span>Nama saja sudah cukup</span>
           </div>
-          <NewInvitationForm />
+          <DesignBrowser />
+          <div className="studio-form">
+            <NewInvitationForm />
+          </div>
         </section>
 
         {drafts.length === 0 ? (
           <section className="empty">
-            <h2>Your first draft starts above</h2>
+            <h2>Draf pertama Anda dimulai di atas</h2>
             <p className="muted">
-              Nothing is published until you say so. You can close this tab and come back later.
+              Tidak akan ada yang diterbitkan sampai Anda menekan tombol terbit. Anda bisa
+              menutup tab ini dan kembali nanti.
             </p>
           </section>
         ) : (
@@ -83,13 +104,16 @@ export default async function DashboardPage() {
                       <span>{designName(wedding.design)}</span>
                       {when ? <span>{when}</span> : null}
                       {wedding.updated_at ? (
-                        <span>Edited {updatedLabel(wedding.updated_at)}</span>
+                        <span>Diedit {updatedLabel(wedding.updated_at)}</span>
                       ) : null}
                     </div>
                   </div>
                   <div className="draft-actions">
                     <Link className="button small" href={`/build/${wedding.id}`}>
                       Edit
+                    </Link>
+                    <Link className="button small secondary" href={`/manage/${wedding.slug}`}>
+                      Manage
                     </Link>
                     <DeleteDraftButton id={wedding.id} title={title} />
                   </div>
