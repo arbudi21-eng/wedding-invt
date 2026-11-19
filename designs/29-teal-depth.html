@@ -84,6 +84,7 @@ section.full{max-width:none;padding-inline:0}
 
 /* ── PERSON: arch frame with teal border, deep sections, gold divider ── */
 #man,#woman{background:var(--bg2)}
+#hero .hero-photo{max-width:min(62vw,280px);margin:2rem auto 0}
 .person-wrap{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(2rem,6vw,4rem);align-items:center}
 .person-wrap.flip{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)}
 .person-wrap.flip .arch-frame{order:2}
@@ -201,6 +202,7 @@ footer{text-align:center;padding:3rem 1.5rem calc(3rem + env(safe-area-inset-bot
   <h2 data-t="h">We're getting married.</h2>
   <div class="rule-gold"></div>
   <p data-t="hp">Together with our families, we would love for you to be there.</p>
+  <div class="arch-frame arch hero-photo" role="img" aria-label="Photo of the couple"></div>
 </section>
 
 <section id="intro" class="rv">

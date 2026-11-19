@@ -923,6 +923,136 @@ footer.foot {
   font-size: 0.8rem;
 }
 
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stat-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-card.ok { border-left: 4px solid var(--ok); }
+.stat-card.danger { border-left: 4px solid var(--danger); }
+.stat-card.warn { border-left: 4px solid var(--warn); }
+
+.stat-label {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-family: var(--serif);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.stat-sub {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.rsvp-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--accent-soft);
+}
+
+.rsvp-seg.attend { background: var(--ok); }
+.rsvp-seg.decline { background: var(--danger); }
+.rsvp-seg.wait { background: var(--warn); opacity: 0.55; }
+
+.rsvp-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.rsvp-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.attend { background: var(--ok); }
+.dot.decline { background: var(--danger); }
+.dot.wait { background: var(--warn); opacity: 0.7; }
+
+.cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.85rem;
+  padding: 0.75rem 0.25rem 0.25rem;
+  line-height: 1.15;
+  user-select: text;
+}
+
+.cloud-word {
+  font-family: var(--serif);
+  font-weight: 700;
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.cloud-word:hover {
+  transform: scale(1.06) !important;
+}
+
+.guest-table-wrapper {
+  overflow-x: auto;
+}
+
+.guest-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.guest-table th,
+.guest-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.guest-table th {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.guest-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 .form-footer {
   display: flex;
   align-items: center;

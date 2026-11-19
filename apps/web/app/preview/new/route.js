@@ -54,6 +54,7 @@ export async function GET(request) {
     },
     gifts,
     video: { link: q('videoLink'), src: q('videoSrc') },
+    music: { url: q('musicUrl') },
     host: q('host'),
     locale: q('locale') === 'en' ? 'en' : 'id',
     text: {

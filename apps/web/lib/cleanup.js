@@ -43,14 +43,25 @@ export async function pruneStaleDrafts() {
     const prefix = `${claims.sub}/${wedding.id}/`;
 
     // List every object under the draft's folder and delete it.
-    const { data: objects, error: listError } = await supabase.storage
-      .from(BUCKET)
-      .list(prefix, { limit: 100 });
+    // Storage list caps at 1000 per page; loop until the folder is empty.
+    let allObjects = [];
+    let offset = 0;
+    for (;;) {
+      const { data: objects, error: listError } = await supabase.storage
+        .from(BUCKET)
+        .list(prefix, { limit: 1000, offset });
+      if (listError) {
+        errors.push(`list ${wedding.id}: ${listError.message}`);
+        break;
+      }
+      if (!objects || objects.length === 0) break;
+      allObjects = allObjects.concat(objects);
+      if (objects.length < 1000) break;
+      offset += objects.length;
+    }
 
-    if (listError) {
-      errors.push(`list ${wedding.id}: ${listError.message}`);
-    } else if (objects && objects.length > 0) {
-      const paths = objects.map((object) => `${prefix}${object.name}`);
+    if (allObjects.length > 0) {
+      const paths = allObjects.map((object) => `${prefix}${object.name}`);
       const { error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
       if (removeError) {
         errors.push(`remove ${wedding.id}: ${removeError.message}`);

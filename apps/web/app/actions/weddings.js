@@ -94,6 +94,16 @@ export async function saveDraft(prevState, formData) {
           ? existing.content.video.src || ''
           : '',
     },
+    music: {
+      ...(parsed.content && typeof parsed.content === 'object' ? parsed.content.music : {}),
+      url:
+        existing.content &&
+        typeof existing.content === 'object' &&
+        existing.content.music &&
+        typeof existing.content.music === 'object'
+          ? existing.content.music.url || ''
+          : '',
+    },
   };
 
   // RLS scopes this to the owner; `maybeSingle()` turns "not yours" and

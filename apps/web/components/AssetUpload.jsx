@@ -80,7 +80,7 @@ export default function AssetUpload({
             <img className="asset-upload-thumb" src={previewSrc} alt="" />
           ) : (
             <span className="inline-note" style={{ margin: 0 }}>
-              Video tersimpan ✓
+              {kind === 'audio' ? 'Musik tersimpan ✓' : 'Video tersimpan ✓'}
             </span>
           )
         ) : (
@@ -97,11 +97,21 @@ export default function AssetUpload({
             className="asset-file"
             type="file"
             accept={
-              kind === 'image' ? 'image/*' : 'video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov'
+              kind === 'image'
+                ? 'image/*'
+                : kind === 'audio'
+                  ? 'audio/*,.mp3,.m4a,.ogg,.wav'
+                  : 'video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov'
             }
             onChange={onFileChange}
           />
-          {picked ? picked.name.slice(0, 40) : kind === 'image' ? 'Pilih foto…' : 'Pilih video…'}
+          {picked
+            ? picked.name.slice(0, 40)
+            : kind === 'image'
+              ? 'Pilih foto…'
+              : kind === 'audio'
+                ? 'Pilih berkas musik…'
+                : 'Pilih video…'}
         </label>
         <button
           className="button small secondary"

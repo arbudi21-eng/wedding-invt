@@ -40,6 +40,7 @@ const FORM_KEYS = [
   'reception',
   'host',
   'videoLink',
+  'musicUrl',
   'gift1Bank',
   'gift1Name',
   'gift1No',
@@ -99,6 +100,7 @@ const formValuesFromContent = (c) => {
     reception: c.schedule.reception,
     host: c.host,
     videoLink: c.video.link,
+    musicUrl: c.music?.url || '',
   };
   (c.gifts || []).slice(0, 3).forEach((gift, index) => {
     values[`gift${index + 1}Bank`] = gift.bank;
@@ -181,6 +183,7 @@ export default function DraftForm({ wedding, content }) {
     album: Array.isArray(content.photos.album) ? content.photos.album : [],
   }));
   const [videoSrc, setVideoSrc] = useState(content.video.src || '');
+  const [musicUrl, setMusicUrl] = useState(content.music?.url || '');
   const photosRef = useRef(photos);
   const videoSrcRef = useRef(videoSrc);
   useEffect(() => {
@@ -273,6 +276,13 @@ export default function DraftForm({ wedding, content }) {
   const setUpload = (slot, url) => {
     if (slot === 'video') {
       setVideoSrc(url);
+    } else if (slot === 'music') {
+      setMusicUrl(url);
+      // Keep the visible text field (the single source of truth for the URL)
+      // in sync with an uploaded file, then rebuild the preview.
+      const input = formRef.current?.elements?.namedItem('musicUrl');
+      if (input) input.value = url;
+      refreshPreview();
     } else {
       setPhotos((prev) => {
         const next = { ...prev, story: [...prev.story], album: [...prev.album] };
@@ -504,6 +514,38 @@ export default function DraftForm({ wedding, content }) {
               label="Berkas video (opsional, diputar inline)"
               kind="video"
               currentUrl={videoSrc}
+              onUploaded={setUpload}
+            />
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="section-title">
+            <h2>Musik</h2>
+            <span>Lagu latar yang diputar saat tamu membuka undangan</span>
+          </div>
+
+          <div className="stack">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="music-url">URL musik (MP3 langsung / YouTube)</label>
+              <input
+                id="music-url"
+                name="musicUrl"
+                type="url"
+                defaultValue={musicUrl}
+                placeholder="https://…/lagu.mp3 atau https://music.youtube.com/watch?v=…"
+              />
+              <p className="hint" style={{ marginTop: '0.35rem' }}>
+                Tempel link berkas .mp3 langsung, atau link video YouTube / YouTube Music — keduanya
+                diputar sebagai musik undangan. Kosongkan semuanya untuk tanpa musik.
+              </p>
+            </div>
+            <AssetUpload
+              weddingId={wedding.id}
+              slot="music"
+              label="Atau unggah berkas musik (MP3, M4A, OGG, WAV)"
+              kind="audio"
+              currentUrl={musicUrl}
               onUploaded={setUpload}
             />
           </div>

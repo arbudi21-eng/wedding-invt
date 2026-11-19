@@ -11,6 +11,8 @@ const BUCKET = 'wedding-photos-2';
 const IMAGE_SLOTS = new Set(['cover', 'man', 'woman', 'hero']);
 for (let i = 0; i < 5; i += 1) IMAGE_SLOTS.add(`story${i}`);
 for (let i = 0; i < 9; i += 1) IMAGE_SLOTS.add(`album${i}`);
+const AUDIO_SLOTS = new Set(['music']);
+const ALL_SLOTS = new Set([...IMAGE_SLOTS, ...AUDIO_SLOTS, 'video']);
 
 const IMAGE_MIME = new Map([
   ['image/jpeg', 'jpg'],
@@ -25,8 +27,20 @@ const VIDEO_MIME = new Map([
   ['video/quicktime', 'mov'],
 ]);
 
+const AUDIO_MIME = new Map([
+  ['audio/mpeg', 'mp3'],
+  ['audio/mp3', 'mp3'],
+  ['audio/mp4', 'm4a'],
+  ['audio/x-m4a', 'm4a'],
+  ['audio/m4a', 'm4a'],
+  ['audio/ogg', 'ogg'],
+  ['audio/wav', 'wav'],
+  ['audio/x-wav', 'wav'],
+]);
+
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 
 function friendlyStorageError(error) {
   if (!error) return 'Could not save the upload. Please try again.';
@@ -40,7 +54,8 @@ function friendlyStorageError(error) {
 }
 
 /**
- * Upload one image (or the invitation video) for a draft invitation.
+ * Upload one media asset (image, the invitation video, or the invitation
+ * music file) for a draft invitation.
  *
  * The file lands at `<auth.uid()>/<wedding-id>/<slot>-<timestamp>.<ext>` in
  * the `wedding-photos-2` bucket (Dashboard-created); the row is updated with the public URL.
@@ -53,7 +68,7 @@ export async function uploadAsset(prevState, formData) {
   const slot = cleanLine(formData.get('slot'), 12);
 
   if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Unknown invitation.' };
-  if (!IMAGE_SLOTS.has(slot) && slot !== 'video') {
+  if (!ALL_SLOTS.has(slot)) {
     return { ok: false, slot, error: 'Unknown upload slot.' };
   }
 
@@ -62,23 +77,34 @@ export async function uploadAsset(prevState, formData) {
     return { ok: false, slot, error: 'Choose a file first.' };
   }
 
-  const kind = slot === 'video' ? 'video' : 'image';
-  const mimeMap = kind === 'video' ? VIDEO_MIME : IMAGE_MIME;
+  const kind = slot === 'video' ? 'video' : slot === 'music' ? 'audio' : 'image';
+  const mimeMap = kind === 'video' ? VIDEO_MIME : kind === 'audio' ? AUDIO_MIME : IMAGE_MIME;
   const ext = mimeMap.get(file.type);
   if (!ext) {
     return {
       ok: false,
       slot,
-      error: kind === 'video' ? 'Use MP4, WebM or MOV.' : 'Use JPEG, PNG, WebP or AVIF.',
+      error:
+        kind === 'video'
+          ? 'Use MP4, WebM or MOV.'
+          : kind === 'audio'
+            ? 'Use MP3, M4A, OGG or WAV.'
+            : 'Use JPEG, PNG, WebP or AVIF.',
     };
   }
 
-  const maxBytes = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  const maxBytes =
+    kind === 'video' ? MAX_VIDEO_BYTES : kind === 'audio' ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
   if (typeof file.size === 'number' && file.size > maxBytes) {
     return {
       ok: false,
       slot,
-      error: kind === 'video' ? 'Video is larger than 40 MB.' : 'Image is larger than 8 MB.',
+      error:
+        kind === 'video'
+          ? 'Video is larger than 40 MB.'
+          : kind === 'audio'
+            ? 'Music is larger than 12 MB.'
+            : 'Image is larger than 8 MB.',
     };
   }
 
@@ -128,6 +154,8 @@ export async function uploadAsset(prevState, formData) {
 
   if (kind === 'video') {
     content.video = { ...(content.video && typeof content.video === 'object' ? content.video : {}), src: url };
+  } else if (kind === 'audio') {
+    content.music = { ...(content.music && typeof content.music === 'object' ? content.music : {}), url };
   } else if (slot === 'cover' || slot === 'man' || slot === 'woman' || slot === 'hero') {
     nextPhotos[slot] = url;
   } else if (slot.startsWith('story')) {
@@ -138,7 +166,7 @@ export async function uploadAsset(prevState, formData) {
     nextPhotos.album[index] = url;
   }
 
-  if (kind !== 'video') content.photos = nextPhotos;
+  if (kind === 'image') content.photos = nextPhotos;
 
   const { error: updateError } = await supabase
     .from('weddings')
@@ -165,7 +193,7 @@ export async function removeAsset(prevState, formData) {
   const slot = cleanLine(formData.get('slot'), 12);
 
   if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Unknown invitation.' };
-  if (!IMAGE_SLOTS.has(slot) && slot !== 'video') {
+  if (!ALL_SLOTS.has(slot)) {
     return { ok: false, slot, error: 'Unknown upload slot.' };
   }
 
@@ -201,6 +229,9 @@ export async function removeAsset(prevState, formData) {
   if (slot === 'video') {
     removed = (content.video && content.video.src) || '';
     content.video = { ...(content.video && typeof content.video === 'object' ? content.video : {}), src: '' };
+  } else if (slot === 'music') {
+    removed = (content.music && content.music.url) || '';
+    content.music = { ...(content.music && typeof content.music === 'object' ? content.music : {}), url: '' };
   } else if (slot === 'cover' || slot === 'man' || slot === 'woman' || slot === 'hero') {
     removed = nextPhotos[slot];
     nextPhotos[slot] = '';
@@ -214,7 +245,7 @@ export async function removeAsset(prevState, formData) {
     nextPhotos.album[index] = '';
   }
 
-  if (slot !== 'video') content.photos = nextPhotos;
+  if (slot !== 'video' && slot !== 'music') content.photos = nextPhotos;
 
   // Best effort: strip the storage path out of the public URL and delete it.
   if (removed) {

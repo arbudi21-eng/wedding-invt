@@ -33,7 +33,7 @@ export async function GET(request, { params }) {
   return new NextResponse(html.html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'public, max-age=60, s-maxage=300',
+      'cache-control': 'private, no-store',
     },
   });
 }

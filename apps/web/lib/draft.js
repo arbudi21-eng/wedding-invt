@@ -125,6 +125,7 @@ export function normalizeContent(raw) {
   const story = object(c.story);
   const captions = object(c.captions);
   const video = object(c.video);
+  const music = object(c.music);
   const photos = object(c.photos);
   const txt = object(c.text);
   const cpl = object(c.couple);
@@ -187,6 +188,7 @@ export function normalizeContent(raw) {
           .filter((gift) => gift.bank && gift.no)
       : [],
     video: { link: cleanUrl(video.link), src: cleanUrl(video.src) },
+    music: { url: cleanUrl(music.url) },
     host: cleanLine(c.host, 80),
     locale: c.locale === 'en' ? 'en' : 'id',
     text: {
@@ -311,6 +313,7 @@ export function draftFromForm(formData) {
       }))
       .filter((gift) => gift.bank && gift.no),
     video: { link: cleanUrl(formData.get('videoLink')), src: '' },
+    music: { url: cleanUrl(formData.get('musicUrl')) },
     host: cleanLine(formData.get('host'), 80),
     locale,
     text: (() => {

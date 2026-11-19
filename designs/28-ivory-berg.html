@@ -78,6 +78,8 @@ section.full{max-width:none;padding-inline:0}
 #intro .k{font:400 .74rem var(--sans);letter-spacing:.3em;text-transform:uppercase;color:var(--berg);margin-bottom:1.2rem}
 #intro h2{font-size:clamp(2rem,7vw,3.4rem);margin-bottom:1.4rem}
 #intro p{max-width:50ch;margin:auto;color:var(--mute);font-size:1.08rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:1.6rem 0}
+#hero .hero-frame{position:relative;aspect-ratio:4/5;width:100%;max-width:380px;overflow:hidden;margin:1.8rem auto 0;background:linear-gradient(170deg,var(--berg),var(--deep))}
+#hero .hero-frame::after{content:"Your photo here";position:absolute;inset:auto 0 1.2rem;text-align:center;font:italic 400 .85rem var(--serif);color:rgba(248,246,240,.75)}
 
 /* ── PERSON: alternating ivory/berg bands, rectangle frame, calm layout ── */
 #man,#woman{max-width:none;padding:0}
@@ -208,6 +210,7 @@ footer{text-align:center;padding:3rem 1.5rem calc(3rem + env(safe-area-inset-bot
   <div class="tag" data-t="wed">The wedding of</div>
   <h2 data-t="h">We're getting married.</h2>
   <p data-t="hp">Together with our families, we would love for you to be there.</p>
+  <div class="hero-frame arch" role="img" aria-label="Photo of the couple"></div>
 </section>
 
 <section id="intro" class="rv">

@@ -36,7 +36,9 @@ function assetsFromContent(content) {
     album: content.photos.album,
   };
   if (content.video.src) assets.video = { src: content.video.src };
-  else if (content.video.link) assets.video = { src: content.video.link };
+  // YouTube / YouTube Music links are not playable as <video src>. They are
+  // handed to the runtime as CFG.video.link only (ev.video.link); the
+  // invitation page embeds them inline as an iframe.
   return assets;
 }
 
@@ -65,6 +67,7 @@ export function buildInvitationHtml({ design, content, slug = '' }) {
     gifts: normalized.gifts,
     video: normalized.video,
     host: normalized.host,
+    music: normalized.music,
     locale: normalized.locale,
     text: normalized.text,
     couple: normalized.couple,

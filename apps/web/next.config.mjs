@@ -17,6 +17,10 @@ const nextConfig = {
       // 40 MB cap lets a small video reach the upload action.
       bodySizeLimit: '40mb',
     },
+    // The proxy clones and buffers request bodies before they reach the
+    // action; its own default cap is 10 MB and it silently truncates.
+    // Video uploads need the full 40 MB + overhead.
+    proxyClientMaxBodySize: '45mb',
   },
 };
 

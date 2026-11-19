@@ -74,6 +74,8 @@ section.full{max-width:none;padding-inline:0}
 #hero h2{font-size:clamp(3.2rem,13vw,8rem);max-width:11ch;margin-bottom:1.6rem}
 #hero .bar{width:5rem;height:10px;background:var(--mustard);margin-bottom:1.6rem}
 #hero p{max-width:36ch;color:var(--mute);font-size:1.05rem;line-height:1.75}
+#hero .hero-frame{position:relative;aspect-ratio:4/5;width:100%;max-width:340px;overflow:hidden;margin-top:2.5rem;background:linear-gradient(160deg,var(--gold),var(--bg2));border:3px solid var(--mustard)}
+#hero .hero-frame::after{content:"Your photo here";position:absolute;inset:auto 0 1rem;text-align:center;font:600 .72rem var(--sans);letter-spacing:.12em;text-transform:uppercase;color:rgba(248,240,192,.7)}
 
 #intro{background:var(--bg2);max-width:none;text-align:center;border-top:10px solid var(--mustard);border-bottom:10px solid var(--mustard)}
 #intro>div{max-width:720px;margin:auto}
@@ -202,6 +204,7 @@ footer{text-align:center;padding:3rem 1.5rem calc(3rem + env(safe-area-inset-bot
   <h2 data-t="h">We're getting married.</h2>
   <div class="bar"></div>
   <p data-t="hp">Together with our families, we would love for you to be there.</p>
+  <div class="hero-frame arch" role="img" aria-label="Photo of the couple"></div>
 </section>
 
 <section id="intro" class="rv">

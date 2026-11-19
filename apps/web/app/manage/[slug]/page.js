@@ -6,7 +6,7 @@ import { designName } from '@/lib/designs';
 import { draftTitle, formatDateISO } from '@/lib/draft';
 import { publishInvitation } from '@/app/actions/publish';
 import DevSkipPublish from './dev-skip-publish';
-import Paywall from '@/components/Paywall';
+import PublishForm from './PublishForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +73,9 @@ export default async function ManagePage({ params }) {
                   <Link className="button secondary" href={`/build/${wedding.id}`}>
                     Edit invitation
                   </Link>
+                  <Link className="button secondary" href={`/manage/${wedding.slug}/kirim`}>
+                    Kirim undangan
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -103,10 +106,25 @@ export default async function ManagePage({ params }) {
             <section className="card">
               <div className="section-title">
                 <h2>Publish</h2>
-                <span>One-time · reusable</span>
+                <span>Satu pembayaran · Rp 100.000</span>
               </div>
-              <Paywall invitationId={wedding.id} designName={designName(wedding.design)} />
+
+              {/* Dev-only free publish — never rendered in production. */}
               <DevSkipPublish invitationId={wedding.id} />
+
+              {/* Paid publish flow with visible promo code field. */}
+              <PublishForm invitationId={wedding.id} />
+              <Link
+                className="button secondary"
+                href={`/preview/${wedding.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Preview undangan
+              </Link>
+              <Link className="button secondary" href={`/build/${wedding.id}`}>
+                Terus mengedit
+              </Link>
             </section>
           ) : (
             <section className="card">
