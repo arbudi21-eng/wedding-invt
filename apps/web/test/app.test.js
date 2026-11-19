@@ -28,6 +28,7 @@ import {
   normalizeContent,
   splitDateISO,
 } from '../lib/draft.js';
+import { buildInvitationHtml } from '../lib/preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.join(here, '..');
@@ -326,6 +327,101 @@ ok(weddingActions.includes("rpc('create_wedding'"), 'drafts are created through 
 ok(weddingActions.includes("error.code !== '23505'"), 'the slug retry loop only retries unique violations');
 ok(weddingActions.includes('MAX_SLUG_ATTEMPTS'), 'the slug retry loop is bounded');
 ok(!/\.insert\(/.test(weddingActions), 'the app never inserts into weddings directly');
+
+// ------------------------------------------------- generated invitation HTML
+
+console.log('=== generated invitation scripts ===');
+
+// Regression guard. A single JavaScript syntax error inside a generated
+// template (e.g. an unescaped quote in an inline event handler) silently kills
+// the ENTIRE template script: uploaded photos never apply and every `.rv`
+// section stays at opacity 0. Every inline <script> body the generator emits
+// must therefore parse as JavaScript.
+const SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+
+function inlineScriptBodies(html) {
+  const bodies = [];
+  let match;
+  SCRIPT_RE.lastIndex = 0;
+  while ((match = SCRIPT_RE.exec(html))) {
+    const attrs = match[1] || '';
+    const body = match[2] || '';
+    if (/\bsrc\s*=/.test(attrs)) continue; // external script: nothing to parse
+    const type = attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)/i);
+    // Only classic/module JavaScript. JSON-LD blocks are data, not code.
+    if (type && !/(java|ecma)script|module/i.test(type[1])) continue;
+    bodies.push(body);
+  }
+  return bodies;
+}
+
+const probeContent = {
+  names: ['Eko', 'Karto'],
+  dateISO: '2026-12-31T10:00:00',
+  locale: 'id',
+  venue: { name: 'Gedung', address: 'Jl. Mawar 1', mapsUrl: '' },
+  story: { en: ['We met.'], id: ['Kami bertemu.'] },
+  gifts: [{ bank: 'Mandiri', name: 'Eko', no: '1234567890' }],
+  photos: {
+    cover: 'https://example.com/cover.jpg',
+    man: 'https://example.com/man.jpg',
+    woman: 'https://example.com/woman.jpg',
+    hero: 'https://example.com/hero.jpg',
+    story: [],
+    album: [],
+  },
+  video: { link: 'https://www.youtube.com/watch?v=ghZt2cILcCU', src: '' },
+};
+
+let scriptTotal = 0;
+let scriptBad = 0;
+let ytDesigns = 0;
+let ytUnsafe = 0;
+
+for (const design of DESIGNS) {
+  const { html } = buildInvitationHtml({
+    design: design.id,
+    content: probeContent,
+    slug: 'eko-karto-K7DCHO',
+  });
+
+  const bodies = inlineScriptBodies(html);
+  scriptTotal += bodies.length;
+  bodies.forEach((body, index) => {
+    try {
+      // Compiles the body without executing it — a syntax error throws here.
+      new Function(body);
+    } catch (error) {
+      scriptBad += 1;
+      console.log(`  FAIL: ${design.id} inline script #${index} does not parse — ${error.message}`);
+    }
+  });
+
+  // The YouTube poster fallback keeps its inline handler quoted with the
+  // &quot; HTML entity so it never terminates the surrounding JS string.
+  if (html.includes('i.ytimg.com')) {
+    ytDesigns += 1;
+    if (!html.includes('this.src=&quot;https://i.ytimg.com')) ytUnsafe += 1;
+  }
+}
+
+ok(scriptTotal > 0, `the generator emits inline scripts to check (${scriptTotal} found)`);
+eq(scriptBad, 0, 'every generated inline script parses as JavaScript');
+ok(ytDesigns > 0, `the YouTube video block is present to check (${ytDesigns} designs)`);
+eq(ytUnsafe, 0, 'the YouTube poster onerror handler is quoted with &quot;, never a raw quote');
+
+// The photo-slot wiring must be injected after the CFG patch so uploaded
+// images apply at runtime.
+const wiringHtml = buildInvitationHtml({
+  design: DESIGNS[0].id,
+  content: probeContent,
+  slug: 'eko-karto-K7DCHO',
+}).html;
+ok(/data-photo="/.test(wiringHtml), 'templates carry data-photo slots');
+ok(
+  /Object\.assign\(CFG,\{[\s\S]*?\}\);[\s\S]*?var map=\{cover:CFG\.cover/.test(wiringHtml),
+  'the photo-slot wiring is injected directly after the CFG patch'
+);
 
 // ---------------------------------------------------------------- summary
 
