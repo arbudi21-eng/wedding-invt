@@ -29,6 +29,7 @@ import {
   splitDateISO,
 } from '../lib/draft.js';
 import { buildInvitationHtml, readDesignHtml, readWiring } from '../lib/preview.js';
+import { DEFAULT_TEMPLATES, renderTemplate, buildShareUrl } from '../lib/share-message.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.join(here, '..');
@@ -575,6 +576,79 @@ ok(
 ok(
   assetUpload.includes('catch (cause)'),
   'a failed music upload stays inline instead of triggering the route error page'
+);
+
+// ------------------------------------------------------- share messages
+
+console.log('=== share messages ===');
+
+const guestList = read('apps/web/app/manage/[slug]/kirim/guest-list.js');
+const messageOf = (url) => decodeURIComponent(new URL(url).searchParams.get('text') || '');
+
+eq(
+  renderTemplate('Halo {nama} — {undangan}: {link}', {
+    name: 'Budi',
+    couple: 'Amara & Dewa',
+    link: 'https://example.com/amara-dewa?c=ABC123',
+  }),
+  'Halo Budi — Amara & Dewa: https://example.com/amara-dewa?c=ABC123',
+  'the three documented placeholders are substituted'
+);
+eq(
+  renderTemplate('{{nama}} / {nama_tamu} / {couple} / {tautan}', {
+    name: 'Budi',
+    couple: 'Amara & Dewa',
+    link: 'https://example.com/invite',
+  }),
+  'Budi / Budi / Amara & Dewa / https://example.com/invite',
+  'alias and double-brace spellings are accepted'
+);
+eq(
+  renderTemplate('Hai {nama}', { name: 'A $& B', couple: 'A', link: 'l' }),
+  'Hai A $& B',
+  'a guest name containing "$" is kept literal'
+);
+
+const idShare = buildShareUrl(
+  'https://example.com',
+  'amara-dewa',
+  'KODE1',
+  'Budi',
+  'Amara & Dewa',
+  'id',
+  '6281200001',
+  DEFAULT_TEMPLATES
+);
+ok(idShare.startsWith('https://wa.me/6281200001?text='), 'the WhatsApp link uses the guest phone number');
+ok(idShare.includes(encodeURIComponent('https://example.com/amara-dewa?c=KODE1')), 'the personal invitation link is encoded into the message');
+ok(idShare.includes(encodeURIComponent('Amara & Dewa')), 'the invitation name is included in the message');
+ok(idShare.includes(encodeURIComponent('Budi')), 'the guest name is included in the message');
+
+const enShare = buildShareUrl(
+  'https://example.com',
+  'amara-dewa',
+  'KODE2',
+  'Anna',
+  'Amara & Dewa',
+  'en',
+  '6281200002',
+  { id: DEFAULT_TEMPLATES.id, en: 'Hi {nama}: {link}' }
+);
+ok(messageOf(enShare).startsWith('Hi Anna: '), 'the English template is used for English guests');
+ok(
+  messageOf(buildShareUrl('https://example.com', 's', 'c', 'B', 'C', 'xx', '1', DEFAULT_TEMPLATES)).startsWith('Halo B'),
+  'an unknown language falls back to the Indonesian template'
+);
+ok(
+  guestList.includes('Pesan undangan') &&
+    guestList.includes('{nama}') &&
+    guestList.includes('{undangan}') &&
+    guestList.includes('{link}'),
+  'the send screen offers a custom message with documented placeholders'
+);
+ok(
+  guestList.includes('Pratinjau') && guestList.includes('Kirim WA'),
+  'the composer previews the message used by the send links'
 );
 
 // ---------------------------------------------------------------- summary

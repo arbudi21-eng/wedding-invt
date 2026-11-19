@@ -2,22 +2,74 @@
 
 import { useActionState, useState } from 'react';
 import { createGuest, setGuestSent, deleteGuest } from '@/app/actions/guests';
-
-function buildShareUrl(siteUrl, slug, code, name, couple, lang, phone) {
-  const link = `${siteUrl}/${slug}?c=${code}`;
-  const text =
-    lang === 'en'
-      ? `Hi ${name}, you're invited to ${couple}'s wedding! Open your invitation here: ${link}`
-      : `Halo ${name}, Anda diundang ke pernikahan ${couple}! Buka undangan Anda di sini: ${link}`;
-  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-}
+import { DEFAULT_TEMPLATES, renderTemplate, buildShareUrl } from '@/lib/share-message';
 
 export default function GuestList({ weddingId, weddingSlug, siteUrl, weddingTitle, guests }) {
   const [state, formAction, creating] = useActionState(createGuest, { ok: false });
   const [done, setDone] = useState({});
+  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+  const [previewLang, setPreviewLang] = useState('id');
+
+  const previewName = guests[0]?.name || 'Nama tamu';
+  const previewLink = `${siteUrl}/${weddingSlug}?c=${guests[0]?.code || 'KODE'}`;
+  const previewText = renderTemplate(templates[previewLang] || '', {
+    name: previewName,
+    couple: weddingTitle,
+    link: previewLink,
+  });
 
   return (
     <>
+      {/* Custom share message */}
+      <section className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="section-title">
+          <h2>Pesan undangan</h2>
+          <span>opsional · dikirim lewat WhatsApp</span>
+        </div>
+        <p className="muted">
+          Tulis pesan sendiri. Selipkan <code className="slug">{'{nama}'}</code> untuk nama tamu,{' '}
+          <code className="slug">{'{undangan}'}</code> untuk nama undangan, dan{' '}
+          <code className="slug">{'{link}'}</code> untuk tautan undangan.
+        </p>
+
+        <div className="row" style={{ marginTop: '0.9rem' }}>
+          <div className="field">
+            <label htmlFor="share-msg-id">Pesan Bahasa Indonesia</label>
+            <textarea
+              id="share-msg-id"
+              value={templates.id}
+              onChange={(event) => setTemplates((current) => ({ ...current, id: event.target.value }))}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="share-msg-en">Pesan English</label>
+            <textarea
+              id="share-msg-en"
+              value={templates.en}
+              onChange={(event) => setTemplates((current) => ({ ...current, en: event.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: '0.85rem' }}>
+          <div className="section-title" style={{ marginBottom: '0.5rem' }}>
+            <h3>Pratinjau</h3>
+            <select
+              aria-label="Bahasa pratinjau"
+              value={previewLang}
+              onChange={(event) => setPreviewLang(event.target.value)}
+              style={{ width: 'auto' }}
+            >
+              <option value="id">Bahasa Indonesia</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <p className="muted" style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            {previewText}
+          </p>
+        </div>
+      </section>
+
       {/* Add form */}
       <section className="card" style={{ marginBottom: '1.25rem' }}>
         <div className="section-title">
@@ -81,7 +133,7 @@ export default function GuestList({ weddingId, weddingSlug, siteUrl, weddingTitl
               </thead>
               <tbody>
                 {guests.map((guest) => {
-                  const shareUrl = buildShareUrl(siteUrl, weddingSlug, guest.code, guest.name, weddingTitle, guest.lang, guest.phone);
+                  const shareUrl = buildShareUrl(siteUrl, weddingSlug, guest.code, guest.name, weddingTitle, guest.lang, guest.phone, templates);
                   const sent = guest.sent_status === 'sent';
                   return (
                     <tr key={guest.id}>
