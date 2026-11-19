@@ -485,6 +485,21 @@ ok(
   publishForm.includes('checkDokuPayment'),
   'the client verifies payment through the authenticated action'
 );
+ok(
+  publishForm.includes('type="button"') &&
+    publishForm.includes('onClick={handlePayment}') &&
+    publishForm.includes("formData.set('promoCode', '')"),
+  'a dedicated payment button works even when the promo field is empty'
+);
+ok(
+  publishForm.includes('Bayar Rp 100.000'),
+  'the always-available action is labelled as a payment'
+);
+ok(
+  publishForm.includes('onSubmit={handlePromoSubmit}') &&
+    publishForm.includes('Pakai kode promosi'),
+  'promo submission remains a separate, optional action'
+);
 ok(publishForm.includes('<img'), 'the client renders the QRIS image');
 ok(publishForm.includes('Cek status pembayaran'), 'manual status check is available');
 ok(dokuMcp.includes('/^api_key_/i'), 'the MCP client rejects legacy key formats');

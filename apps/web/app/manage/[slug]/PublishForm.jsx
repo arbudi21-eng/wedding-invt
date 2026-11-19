@@ -10,8 +10,10 @@ import {
 const POLL_MS = 5000;
 
 /**
- * Publish paywall. The promo code is submitted to the server and validated
- * there; its value is never hard-coded or shipped in this client bundle.
+ * Publish paywall. Payment and promo are two independent ways to publish:
+ * the Rp 100.000 button works with an empty promo field, while the promo code
+ * is submitted separately and validated only on the server. Its value is never
+ * hard-coded or shipped in this client bundle.
  *
  * When a payment is required, the QRIS image is rendered inline and the page
  * polls DOKU through the authenticated `checkDokuPayment` action. Only that
@@ -102,47 +104,82 @@ export default function PublishForm({
     };
   }, [qrDataUrl, stopPolling, checkStatus]);
 
-  const handleSubmit = async (event) => {
+  const startQris = useCallback(async () => {
+    const paymentData = new FormData();
+    paymentData.set('id', invitationId);
+
+    const payment = await createDokuPayment(null, paymentData);
+
+    if (payment?.ok && payment.qrDataUrl) {
+      setInvoiceNumber(payment.invoiceNumber || '');
+      setQrDataUrl(payment.qrDataUrl);
+      setStopPolling(false);
+      return true;
+    }
+
+    setMessage({
+      type: 'error',
+      text: payment?.error || 'Gagal membuat QRIS. Coba lagi.',
+    });
+    return false;
+  }, [invitationId]);
+
+  const runPublish = async (formData, { promoSubmitted }) => {
+    const result = await publishWithPayment(null, formData);
+
+    if (result?.ok) {
+      window.location.reload();
+      return;
+    }
+
+    if (result?.paymentRequired) {
+      if (promoSubmitted) {
+        setMessage({
+          type: 'info',
+          text: 'Kode promosi tidak berlaku. Silakan bayar Rp 100.000 atau coba kode lain.',
+        });
+      }
+      await startQris();
+      return;
+    }
+
+    setMessage({
+      type: 'error',
+      text: result?.error || 'Gagal menerbitkan undangan. Coba lagi.',
+    });
+  };
+
+  // Dedicated payment action: never reads the promo field, so an empty promo
+  // input cannot block publishing through DOKU.
+  const handlePayment = async () => {
+    setBusy(true);
+    setMessage(null);
+
+    const formData = new FormData();
+    formData.set('id', invitationId);
+    formData.set('promoCode', '');
+
+    try {
+      await runPublish(formData, { promoSubmitted: false });
+    } catch {
+      setMessage({
+        type: 'error',
+        text: 'Gagal terhubung ke server. Coba lagi.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Promo is optional: submitting an invalid or empty code still falls through
+  // to the Rp 100.000 QRIS so the owner is never stuck with a dead button.
+  const handlePromoSubmit = async (event) => {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
 
-    const formData = new FormData(event.currentTarget);
-
     try {
-      const result = await publishWithPayment(null, formData);
-
-      if (result?.ok) {
-        window.location.reload();
-        return;
-      }
-
-      if (result?.paymentRequired) {
-        const paymentData = new FormData();
-        paymentData.set('id', invitationId);
-        const payment = await createDokuPayment(null, paymentData);
-
-        if (payment?.ok && payment.qrDataUrl) {
-          setInvoiceNumber(payment.invoiceNumber || '');
-          setQrDataUrl(payment.qrDataUrl);
-          setStopPolling(false);
-          setMessage({
-            type: 'info',
-            text: 'Pindai QRIS di bawah dengan aplikasi bank atau e-wallet. Status akan diperiksa otomatis.',
-          });
-        } else {
-          setMessage({
-            type: 'error',
-            text: payment?.error || 'Gagal membuat QRIS. Coba lagi.',
-          });
-        }
-        return;
-      }
-
-      setMessage({
-        type: 'error',
-        text: result?.error || 'Gagal menerbitkan undangan. Coba lagi.',
-      });
+      await runPublish(new FormData(event.currentTarget), { promoSubmitted: true });
     } catch {
       setMessage({
         type: 'error',
@@ -173,11 +210,15 @@ export default function PublishForm({
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit}>
+      <button className="button" type="button" onClick={handlePayment} disabled={busy}>
+        {busy ? 'Memproses…' : 'Bayar Rp 100.000'}
+      </button>
+
+      <form onSubmit={handlePromoSubmit} style={{ marginTop: '0.75rem' }}>
         <input type="hidden" name="id" value={invitationId} />
 
         <div className="field">
-          <label htmlFor="promo-code">Kode promosi (opsional)</label>
+          <label htmlFor="promo-code">Punya kode promosi? (opsional)</label>
           <input
             id="promo-code"
             name="promoCode"
@@ -187,8 +228,8 @@ export default function PublishForm({
           />
         </div>
 
-        <button className="button" type="submit" disabled={busy || !paymentsReady}>
-          {busy ? 'Memproses…' : 'Terbitkan (Rp 100.000)'}
+        <button className="button secondary" type="submit" disabled={busy}>
+          {busy ? 'Memproses…' : 'Pakai kode promosi'}
         </button>
       </form>
 
