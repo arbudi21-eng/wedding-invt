@@ -130,6 +130,18 @@ h1,h2,h3{font-weight:700;text-transform:uppercase;letter-spacing:-.04em;line-hei
 #gallery{padding-inline:0;background:var(--bg)}#gallery h2{padding-inline:1.5rem}.track{display:grid;grid-template-columns:1fr 1fr;gap:0;overflow:visible;padding:0}.slide{flex:none}.slide:nth-child(even){margin-top:0}.slide:nth-child(3n+1){grid-column:1/-1}.card{border-radius:0;aspect-ratio:1;border:3px solid #111}.slide:nth-child(3n+1) .card{aspect-ratio:16/10}.st{padding:.8rem 1.2rem 1.4rem;border:3px solid #111;border-top:0}.slide:nth-child(odd) .st{background:#ffc400}.slide:nth-child(even) .st{background:#fff}.dots{display:none}
 .mas{columns:2;column-gap:0}.mas>div{border-radius:0;margin:0;border:3px solid #111}.vid{border-radius:0;border:3px solid #111}
 #closing{background:#1f4fd8;color:#fff;margin:2rem auto;width:calc(100% - 2rem)}#closing h2,#closing p,#closing .pax span,#closing .pax b{color:#fff}#closing .btn.solid{background:#d92b10}.pax div button{border-color:#fff;color:#fff}.acct{border-bottom:3px solid #111}
+
+/* Couple — groom & bride */
+#man,#woman{padding-block:clamp(2.2rem,8vw,4.5rem)}
+.couple{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.78fr);gap:clamp(1.5rem,5vw,3.2rem);align-items:center}
+.couple.flip{grid-template-columns:minmax(0,.78fr) minmax(0,1fr)}
+.couple .who h2{margin:.5rem 0 1rem}
+.couple .who p{color:var(--mute);line-height:1.7;margin:0 0 1.1rem}
+.kick{display:inline-block;font:600 .72rem/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--clay)}
+.kin{display:block;border-top:1px solid var(--line);padding-top:.9rem;margin-top:1rem;font:500 .74rem/1.6 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.person-photo{position:relative;overflow:hidden;width:100%;aspect-ratio:3/4;background:var(--bg2)}
+.person-photo::after{content:"Your photo here";position:absolute;inset:auto 0 1rem;text-align:center;font-size:.8rem;color:var(--mute);opacity:.8}
+@media(max-width:760px){.couple,.couple.flip{grid-template-columns:1fr}.couple .who{order:2}.couple .person-photo{order:1;max-width:min(72vw,300px);margin-inline:auto}}
 </style>
 </head>
 <body class="locked">
@@ -151,6 +163,30 @@ h1,h2,h3{font-weight:700;text-transform:uppercase;letter-spacing:-.04em;line-hei
   <p data-t="date">Saturday, 13 March 2027</p>
   <h2 data-t="h">We’re getting married.</h2>
   <p data-t="hp">Together with our families, we would love for you to be there.</p>
+</section>
+
+<section id="man" class="rv">
+  <div class="couple">
+    <div class="who">
+      <span class="kick" data-t="manK">The groom</span>
+      <h2>Dewa</h2>
+      <p data-t="manP">Dewa is the calm one: early to rise, always the first to make tea, and the last to leave the table.</p>
+      <span class="kin" data-t="manF">Son of Mr. &amp; Mrs. …</span>
+    </div>
+    <div class="person-photo" data-photo="man" role="img" aria-label="Photo of the groom"></div>
+  </div>
+</section>
+
+<section id="woman" class="rv">
+  <div class="couple flip">
+    <div class="person-photo" data-photo="woman" role="img" aria-label="Photo of the bride"></div>
+    <div class="who">
+      <span class="kick" data-t="womanK">The bride</span>
+      <h2>Amara</h2>
+      <p data-t="womanP">Amara notices the small things — good bread, old postcards, and the exact moment the light changes.</p>
+      <span class="kin" data-t="womanF">Daughter of Mr. &amp; Mrs. …</span>
+    </div>
+  </div>
 </section>
 
 <section class="rv">
@@ -209,8 +245,8 @@ const $=s=>document.querySelector(s);
 // Link format: page#Budi-Santoso--id  (or --en). Language also follows the phone setting.
 let L=(navigator.language||'en').toLowerCase().startsWith('id')?'id':'en',GN='';
 const T={
-en:{wed:'The wedding of',dear:'Dear',open:'Open invitation',date:'Saturday, 13 March 2027',h:'We’re getting married.',hp:'Together with our families, we would love for you to be there.',cd:'Counting down',when:'When',where:'Where',dress:'Dress',w:'Saturday, 13 March 2027<small>Ceremony 10:00 · Reception 12:00</small>',v:'Your Venue Name<small>Street address, City</small>',d:'Warm neutrals<small>Mocha, sand, clay, cream</small>',map:'Open in Maps',gal:'Our story, so far',cl:'See you there.',clp:'Your presence is the gift. Please let us know if you can make it.',yes:'I’ll be there',no:'Can’t make it',how:'How many people in total?',send:'Confirm on WhatsApp',wh:'Wishes from our guests',wb:'Send us a wish',gf:'Wedding gift',gfp:'Your presence is the greatest gift. If you would also like to send a gift, you can transfer to the account below.',copy:'Copy number',copied:'Copied',fl:'The film',gl:'Gallery',vph:'Your video goes here',vl:'Watch the full video',guest:'Beloved Guest',u:['days','hours','minutes','seconds'],caps:['How we met','The first trip','The question','Our people','Next chapter'],story:['Write a few lines about the day you first met: where it was, what you remember, and who spoke first.','The first trip together. Add one small detail that only the two of you remember.','The proposal, in your own words: where you were and what was said.','A line about the families and friends who brought you both to this day.','What you look forward to next, and why you want your guests to be part of it.'],lang:'ID'},
-id:{wed:'Pernikahan',dear:'Yth.',open:'Buka undangan',date:'Sabtu, 13 Maret 2027',h:'Kami akan menikah.',hp:'Bersama keluarga, kami sangat berharap Anda dapat hadir.',cd:'Hitung mundur',when:'Kapan',where:'Di mana',dress:'Busana',w:'Sabtu, 13 Maret 2027<small>Upacara 10.00 · Resepsi 12.00</small>',v:'Nama Tempat Anda<small>Alamat, Kota</small>',d:'Warna hangat<small>Mocha, pasir, terakota, krem</small>',map:'Buka di Peta',gal:'Kisah kami',cl:'Sampai jumpa.',clp:'Kehadiran Anda adalah hadiah terbaik. Mohon kabari kami jika bisa hadir.',yes:'Saya akan hadir',no:'Tidak bisa hadir',how:'Berapa orang yang akan hadir?',send:'Konfirmasi lewat WhatsApp',wh:'Ucapan dari para tamu',wb:'Kirim ucapan',gf:'Hadiah pernikahan',gfp:'Kehadiran Anda adalah hadiah terbaik. Jika ingin memberikan tanda kasih, Anda dapat mengirimkannya ke rekening berikut.',copy:'Salin nomor',copied:'Tersalin',fl:'Cuplikan film',gl:'Galeri',vph:'Video Anda di sini',vl:'Tonton video lengkap',guest:'Tamu Terhormat',u:['hari','jam','menit','detik'],caps:['Pertama bertemu','Perjalanan pertama','Sebuah pertanyaan','Orang-orang kami','Babak baru'],story:['Tulis beberapa baris tentang hari pertama kalian bertemu: di mana, apa yang diingat, dan siapa yang menyapa lebih dulu.','Perjalanan pertama bersama. Tambahkan satu detail kecil yang hanya kalian berdua ingat.','Momen lamaran, dengan kata-kata kalian sendiri: di mana dan apa yang diucapkan.','Satu kalimat untuk keluarga dan sahabat yang membawa kalian sampai hari ini.','Apa yang kalian nantikan selanjutnya, dan mengapa kalian ingin tamu menjadi bagian darinya.'],lang:'EN'}};
+en:{wed:'The wedding of',dear:'Dear',open:'Open invitation',date:'Saturday, 13 March 2027',h:'We’re getting married.',hp:'Together with our families, we would love for you to be there.',cd:'Counting down',when:'When',where:'Where',dress:'Dress',w:'Saturday, 13 March 2027<small>Ceremony 10:00 · Reception 12:00</small>',v:'Your Venue Name<small>Street address, City</small>',d:'Warm neutrals<small>Mocha, sand, clay, cream</small>',map:'Open in Maps',gal:'Our story, so far',cl:'See you there.',clp:'Your presence is the gift. Please let us know if you can make it.',yes:'I’ll be there',no:'Can’t make it',how:'How many people in total?',send:'Confirm on WhatsApp',wh:'Wishes from our guests',wb:'Send us a wish',gf:'Wedding gift',gfp:'Your presence is the greatest gift. If you would also like to send a gift, you can transfer to the account below.',copy:'Copy number',copied:'Copied',fl:'The film',gl:'Gallery',vph:'Your video goes here',vl:'Watch the full video',guest:'Beloved Guest',u:['days','hours','minutes','seconds'],caps:['How we met','The first trip','The question','Our people','Next chapter'],story:['Write a few lines about the day you first met: where it was, what you remember, and who spoke first.','The first trip together. Add one small detail that only the two of you remember.','The proposal, in your own words: where you were and what was said.','A line about the families and friends who brought you both to this day.','What you look forward to next, and why you want your guests to be part of it.'],manK:'The groom',manP:'Dewa is the calm one: early to rise, always the first to make tea, and the last to leave the table.',manF:'Son of Mr. &amp; Mrs. …',womanK:'The bride',womanP:'Amara notices the small things — good bread, old postcards, and the exact moment the light changes.',womanF:'Daughter of Mr. &amp; Mrs. …',lang:'ID'},
+id:{wed:'Pernikahan',dear:'Yth.',open:'Buka undangan',date:'Sabtu, 13 Maret 2027',h:'Kami akan menikah.',hp:'Bersama keluarga, kami sangat berharap Anda dapat hadir.',cd:'Hitung mundur',when:'Kapan',where:'Di mana',dress:'Busana',w:'Sabtu, 13 Maret 2027<small>Upacara 10.00 · Resepsi 12.00</small>',v:'Nama Tempat Anda<small>Alamat, Kota</small>',d:'Warna hangat<small>Mocha, pasir, terakota, krem</small>',map:'Buka di Peta',gal:'Kisah kami',cl:'Sampai jumpa.',clp:'Kehadiran Anda adalah hadiah terbaik. Mohon kabari kami jika bisa hadir.',yes:'Saya akan hadir',no:'Tidak bisa hadir',how:'Berapa orang yang akan hadir?',send:'Konfirmasi lewat WhatsApp',wh:'Ucapan dari para tamu',wb:'Kirim ucapan',gf:'Hadiah pernikahan',gfp:'Kehadiran Anda adalah hadiah terbaik. Jika ingin memberikan tanda kasih, Anda dapat mengirimkannya ke rekening berikut.',copy:'Salin nomor',copied:'Tersalin',fl:'Cuplikan film',gl:'Galeri',vph:'Video Anda di sini',vl:'Tonton video lengkap',guest:'Tamu Terhormat',u:['hari','jam','menit','detik'],caps:['Pertama bertemu','Perjalanan pertama','Sebuah pertanyaan','Orang-orang kami','Babak baru'],story:['Tulis beberapa baris tentang hari pertama kalian bertemu: di mana, apa yang diingat, dan siapa yang menyapa lebih dulu.','Perjalanan pertama bersama. Tambahkan satu detail kecil yang hanya kalian berdua ingat.','Momen lamaran, dengan kata-kata kalian sendiri: di mana dan apa yang diucapkan.','Satu kalimat untuk keluarga dan sahabat yang membawa kalian sampai hari ini.','Apa yang kalian nantikan selanjutnya, dan mengapa kalian ingin tamu menjadi bagian darinya.'],manK:'Mempelai pria',manP:'Dewa adalah yang paling tenang: bangun pagi, selalu yang pertama menyeduh teh, dan yang terakhir meninggalkan meja.',manF:'Putra dari Bapak &amp; Ibu …',womanK:'Mempelai wanita',womanP:'Amara memperhatikan hal-hal kecil — roti hangat, kartu pos lawas, dan momen tepat ketika cahaya berubah.',womanF:'Putri dari Bapak &amp; Ibu …',lang:'EN'}};
 function applyLang(){
   document.documentElement.lang=L;
   document.querySelectorAll('[data-t]').forEach(e=>e.innerHTML=T[L][e.dataset.t]);
