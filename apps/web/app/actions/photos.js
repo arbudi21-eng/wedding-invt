@@ -94,6 +94,96 @@ function friendlyStorageError(error) {
   return `Gagal menyimpan berkas: ${raw.slice(0, 160)}`;
 }
 
+function slotKind(slot) {
+  return slot === 'video' ? 'video' : slot === 'music' ? 'audio' : 'image';
+}
+
+function slotMimeMap(kind) {
+  return kind === 'video' ? VIDEO_MIME : kind === 'audio' ? AUDIO_MIME : IMAGE_MIME;
+}
+
+function slotMaxBytes(kind) {
+  return kind === 'video'
+    ? MAX_VIDEO_BYTES
+    : kind === 'audio'
+      ? MAX_AUDIO_BYTES
+      : MAX_IMAGE_BYTES;
+}
+
+function unsupportedTypeError(kind) {
+  return kind === 'video'
+    ? 'Gunakan MP4, WebM, atau MOV.'
+    : kind === 'audio'
+      ? 'Gunakan MP3, M4A, AAC, OGG, WAV, atau FLAC.'
+      : 'Gunakan JPEG, PNG, WebP, atau AVIF.';
+}
+
+function tooLargeError(kind) {
+  return kind === 'video'
+    ? 'Video lebih besar dari 40 MB.'
+    : kind === 'audio'
+      ? 'Berkas musik lebih besar dari 30 MB.'
+      : 'Gambar lebih besar dari 8 MB.';
+}
+
+/** Apply an uploaded file's public URL to the invitation content. */
+function contentWithAsset(existing, slot, kind, url) {
+  const content =
+    existing.content && typeof existing.content === 'object' ? existing.content : {};
+  const photos =
+    content.photos && typeof content.photos === 'object' && !Array.isArray(content.photos)
+      ? content.photos
+      : {};
+  const nextPhotos = {
+    cover: typeof photos.cover === 'string' ? photos.cover : '',
+    man: typeof photos.man === 'string' ? photos.man : '',
+    woman: typeof photos.woman === 'string' ? photos.woman : '',
+    hero: typeof photos.hero === 'string' ? photos.hero : '',
+    story: Array.isArray(photos.story) ? [...photos.story] : [],
+    album: Array.isArray(photos.album) ? [...photos.album] : [],
+  };
+
+  if (kind === 'video') {
+    content.video = {
+      ...(content.video && typeof content.video === 'object' ? content.video : {}),
+      src: url,
+    };
+  } else if (kind === 'audio') {
+    content.music = {
+      ...(content.music && typeof content.music === 'object' ? content.music : {}),
+      url,
+    };
+  } else if (slot === 'cover' || slot === 'man' || slot === 'woman' || slot === 'hero') {
+    nextPhotos[slot] = url;
+  } else if (slot.startsWith('story')) {
+    nextPhotos.story[Number(slot.slice(5))] = url;
+  } else if (slot.startsWith('album')) {
+    nextPhotos.album[Number(slot.slice(5))] = url;
+  }
+
+  if (kind === 'image') content.photos = nextPhotos;
+  return content;
+}
+
+/** Verify the caller owns the invitation and return its current content. */
+async function readOwnedWedding(supabase, id, slot) {
+  const { data, error } = await supabase.from('weddings').select('content').eq('id', id).maybeSingle();
+  if (error) return { error: { ok: false, slot, error: friendlyStorageError(error) } };
+  if (!data) return { error: { ok: false, slot, error: 'Undangan tidak ditemukan.' } };
+  return { data };
+}
+
+/** Save the updated content and revalidate the studio/preview routes. */
+async function persistAsset(supabase, id, content, slot, url) {
+  const { error } = await supabase.from('weddings').update({ content }).eq('id', id);
+  if (error) return { ok: false, slot, error: friendlyStorageError(error) };
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/build/${id}`);
+  revalidatePath(`/preview/${id}`);
+  return { ok: true, slot, url };
+}
+
 /**
  * Upload one media asset (image, the invitation video, or the invitation
  * music file) for a draft invitation.
@@ -118,37 +208,14 @@ export async function uploadAsset(prevState, formData) {
     return { ok: false, slot, error: 'Pilih berkas terlebih dahulu.' };
   }
 
-  const kind = slot === 'video' ? 'video' : slot === 'music' ? 'audio' : 'image';
-  const mimeMap = kind === 'video' ? VIDEO_MIME : kind === 'audio' ? AUDIO_MIME : IMAGE_MIME;
+  const kind = slotKind(slot);
   const ext =
-    mimeMap.get(file.type) ||
+    slotMimeMap(kind).get(file.type) ||
     (kind === 'audio' ? AUDIO_EXT.get(extensionOf(file.name)) : '');
-  if (!ext) {
-    return {
-      ok: false,
-      slot,
-      error:
-        kind === 'video'
-          ? 'Gunakan MP4, WebM, atau MOV.'
-          : kind === 'audio'
-            ? 'Gunakan MP3, M4A, AAC, OGG, WAV, atau FLAC.'
-            : 'Gunakan JPEG, PNG, WebP, atau AVIF.',
-    };
-  }
+  if (!ext) return { ok: false, slot, error: unsupportedTypeError(kind) };
 
-  const maxBytes =
-    kind === 'video' ? MAX_VIDEO_BYTES : kind === 'audio' ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
-  if (typeof file.size === 'number' && file.size > maxBytes) {
-    return {
-      ok: false,
-      slot,
-      error:
-        kind === 'video'
-          ? 'Video lebih besar dari 40 MB.'
-          : kind === 'audio'
-            ? 'Berkas musik lebih besar dari 30 MB.'
-            : 'Gambar lebih besar dari 8 MB.',
-    };
+  if (typeof file.size === 'number' && file.size > slotMaxBytes(kind)) {
+    return { ok: false, slot, error: tooLargeError(kind) };
   }
 
   const { supabase, claims } = await getClaims();
@@ -156,21 +223,8 @@ export async function uploadAsset(prevState, formData) {
 
   // RLS: reading the row proves ownership; "not yours" looks identical to
   // "does not exist".
-  const { data: existing, error: readError } = await supabase
-    .from('weddings')
-    .select('content')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (readError) return { ok: false, slot, error: friendlyStorageError(readError) };
-  if (!existing) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
-
-  const content =
-    existing.content && typeof existing.content === 'object' ? existing.content : {};
-  const photos =
-    content.photos && typeof content.photos === 'object' && !Array.isArray(content.photos)
-      ? content.photos
-      : {};
+  const { data: existing, error: ownershipError } = await readOwnedWedding(supabase, id, slot);
+  if (ownershipError) return ownershipError;
 
   const cleanExt = ext.replace(/[^a-z0-9]/g, '');
   const stamp = Date.now().toString(36);
@@ -186,45 +240,81 @@ export async function uploadAsset(prevState, formData) {
   const url = publicData && publicData.publicUrl ? cleanUrl(publicData.publicUrl) : '';
   if (!url) return { ok: false, slot, error: 'Berkas tersimpan, tetapi tautannya gagal dibuat.' };
 
-  const nextPhotos = {
-    cover: typeof photos.cover === 'string' ? photos.cover : '',
-    man: typeof photos.man === 'string' ? photos.man : '',
-    woman: typeof photos.woman === 'string' ? photos.woman : '',
-    hero: typeof photos.hero === 'string' ? photos.hero : '',
-    story: Array.isArray(photos.story) ? [...photos.story] : [],
-    album: Array.isArray(photos.album) ? [...photos.album] : [],
-  };
+  return persistAsset(supabase, id, contentWithAsset(existing, slot, kind, url), slot, url);
+}
 
-  if (kind === 'video') {
-    content.video = { ...(content.video && typeof content.video === 'object' ? content.video : {}), src: url };
-  } else if (kind === 'audio') {
-    content.music = { ...(content.music && typeof content.music === 'object' ? content.music : {}), url };
-  } else if (slot === 'cover' || slot === 'man' || slot === 'woman' || slot === 'hero') {
-    nextPhotos[slot] = url;
-  } else if (slot.startsWith('story')) {
-    const index = Number(slot.slice(5));
-    nextPhotos.story[index] = url;
-  } else if (slot.startsWith('album')) {
-    const index = Number(slot.slice(5));
-    nextPhotos.album[index] = url;
+/**
+ * Issue a short-lived signed upload URL so the browser can send the file
+ * straight to Supabase Storage. Server Actions on Vercel cap request bodies at
+ * 4.5 MB, which is far below a normal song — passing the bytes through this
+ * action is what made music uploads fail with a generic page error.
+ *
+ * Only small strings cross the action boundary here; the file never does.
+ */
+export async function prepareAssetUpload(prevState, formData) {
+  const id = cleanLine(formData.get('id'), 40);
+  const slot = cleanLine(formData.get('slot'), 12);
+
+  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
+  if (!ALL_SLOTS.has(slot)) {
+    return { ok: false, slot, error: 'Slot unggahan tidak dikenal.' };
   }
 
-  if (kind === 'image') content.photos = nextPhotos;
+  const kind = slotKind(slot);
+  const fileName = cleanLine(formData.get('fileName'), 200);
+  const fileType = cleanLine(formData.get('fileType'), 100);
+  const ext =
+    slotMimeMap(kind).get(fileType) ||
+    (kind === 'audio' ? AUDIO_EXT.get(extensionOf(fileName)) : '');
+  if (!ext) return { ok: false, slot, error: unsupportedTypeError(kind) };
 
-  const { error: updateError } = await supabase
-    .from('weddings')
-    .update({ content })
-    .eq('id', id);
-
-  if (updateError) {
-    return { ok: false, slot, error: friendlyStorageError(updateError) };
+  const fileSize = Number(formData.get('fileSize'));
+  if (Number.isFinite(fileSize) && fileSize > slotMaxBytes(kind)) {
+    return { ok: false, slot, error: tooLargeError(kind) };
   }
 
-  revalidatePath('/dashboard');
-  revalidatePath(`/build/${id}`);
-  revalidatePath(`/preview/${id}`);
+  const { supabase, claims } = await getClaims();
+  if (!claims?.sub) return { ok: false, slot, error: 'Sesi habis. Masuk kembali.' };
 
-  return { ok: true, slot, url };
+  const { data: existing, error: ownershipError } = await readOwnedWedding(supabase, id, slot);
+  if (ownershipError) return ownershipError;
+
+  const path = `${claims.sub}/${id}/${slot}-${Date.now().toString(36)}.${ext.replace(/[^a-z0-9]/g, '')}`;
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error) return { ok: false, slot, error: friendlyStorageError(error) };
+
+  const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  const url = publicData && publicData.publicUrl ? cleanUrl(publicData.publicUrl) : '';
+  if (!url || !data?.signedUrl) {
+    return { ok: false, slot, error: 'Berkas tersimpan, tetapi tautannya gagal dibuat.' };
+  }
+
+  return { ok: true, slot, signedUrl: data.signedUrl, url };
+}
+
+/**
+ * Record the public URL after a direct-to-Storage upload. The file has already
+ * been validated by `prepareAssetUpload`; ownership is checked again here.
+ */
+export async function saveAssetUrl(prevState, formData) {
+  const id = cleanLine(formData.get('id'), 40);
+  const slot = cleanLine(formData.get('slot'), 12);
+  const url = cleanUrl(formData.get('url'));
+
+  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
+  if (!ALL_SLOTS.has(slot)) {
+    return { ok: false, slot, error: 'Slot unggahan tidak dikenal.' };
+  }
+  if (!url) return { ok: false, slot, error: 'Tautan berkas tidak valid.' };
+
+  const { supabase, claims } = await getClaims();
+  if (!claims?.sub) return { ok: false, slot, error: 'Sesi habis. Masuk kembali.' };
+
+  const { data: existing, error: ownershipError } = await readOwnedWedding(supabase, id, slot);
+  if (ownershipError) return ownershipError;
+
+  const content = contentWithAsset(existing, slot, slotKind(slot), url);
+  return persistAsset(supabase, id, content, slot, url);
 }
 
 /**

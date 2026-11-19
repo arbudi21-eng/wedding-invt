@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
-import { uploadAsset, removeAsset } from '@/app/actions/photos';
+import { prepareAssetUpload, saveAssetUrl, removeAsset } from '@/app/actions/photos';
 import { compressImage } from '@/lib/image';
 
 export default function AssetUpload({
@@ -30,6 +30,50 @@ export default function AssetUpload({
     setLocalPreview(kind === 'image' ? URL.createObjectURL(file) : '');
   };
 
+  /**
+   * Send the file straight to Supabase Storage with a server-issued signed URL.
+   * A Server Action cannot carry a full song (Vercel caps action bodies at
+   * 4.5 MB), so only metadata crosses the action boundary.
+   */
+  const uploadDirect = async (file) => {
+    const meta = new FormData();
+    meta.set('id', weddingId);
+    meta.set('slot', slot);
+    meta.set('fileName', file.name);
+    meta.set('fileType', file.type || '');
+    meta.set('fileSize', String(file.size));
+
+    const prepared = await prepareAssetUpload(null, meta);
+    if (!prepared?.ok) {
+      throw new Error(prepared?.error || 'Gagal menyiapkan unggahan. Coba lagi.');
+    }
+
+    // Mirrors storage-js uploadToSignedUrl: multipart body with the blob under
+    // an empty field name plus the cacheControl field.
+    const body = new FormData();
+    body.append('cacheControl', '3600');
+    body.append('', file, file.name);
+
+    const response = await fetch(prepared.signedUrl, {
+      method: 'PUT',
+      headers: { 'x-upsert': 'false' },
+      body,
+    });
+    if (!response.ok) {
+      throw new Error('Gagal mengirim berkas ke penyimpanan. Coba lagi.');
+    }
+
+    const save = new FormData();
+    save.set('id', weddingId);
+    save.set('slot', slot);
+    save.set('url', prepared.url);
+    const saved = await saveAssetUrl(null, save);
+    if (!saved?.ok) {
+      throw new Error(saved?.error || 'Gagal menyimpan tautan berkas. Coba lagi.');
+    }
+    return saved.url;
+  };
+
   const upload = () => {
     if (!picked) return;
     setError('');
@@ -52,38 +96,40 @@ export default function AssetUpload({
     }
 
     startTransition(async () => {
-      // Shrink phone photos (often > 8 MB) to fit under the upload cap.
-      // Audio and video pass through untouched.
-      const file = await compressImage(picked);
+      try {
+        // Shrink phone photos (often > 8 MB) to fit under the upload cap.
+        // Audio and video pass through untouched.
+        const file = await compressImage(picked);
+        const url = await uploadDirect(file);
 
-      const fd = new FormData();
-      fd.set('id', weddingId);
-      fd.set('slot', slot);
-      fd.set('file', file);
-      const result = await uploadAsset(null, fd);
-      if (!result || !result.ok) {
-        setError((result && result.error) || 'Gagal mengunggah. Coba lagi.');
-        return;
+        setPicked(null);
+        setLocalPreview('');
+        if (fileRef.current) fileRef.current.value = '';
+        onUploaded(slot, url || '');
+      } catch (cause) {
+        // Keep failures inline. An uncaught rejection in an async transition
+        // bubbles to the route error boundary and replaces the whole studio.
+        setError(cause?.message || 'Gagal mengunggah. Coba lagi.');
       }
-      setPicked(null);
-      setLocalPreview('');
-      if (fileRef.current) fileRef.current.value = '';
-      onUploaded(slot, result.url || '');
     });
   };
 
   const remove = () => {
     setError('');
     startTransition(async () => {
-      const fd = new FormData();
-      fd.set('id', weddingId);
-      fd.set('slot', slot);
-      const result = await removeAsset(null, fd);
-      if (!result || !result.ok) {
-        setError((result && result.error) || 'Gagal menghapus berkas. Coba lagi.');
-        return;
+      try {
+        const fd = new FormData();
+        fd.set('id', weddingId);
+        fd.set('slot', slot);
+        const result = await removeAsset(null, fd);
+        if (!result || !result.ok) {
+          setError((result && result.error) || 'Gagal menghapus berkas. Coba lagi.');
+          return;
+        }
+        onUploaded(slot, '');
+      } catch {
+        setError('Gagal menghapus berkas. Coba lagi.');
       }
-      onUploaded(slot, '');
     });
   };
 

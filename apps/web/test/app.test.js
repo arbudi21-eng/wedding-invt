@@ -557,6 +557,25 @@ ok(
   assetUpload.includes('Berkas musik lebih besar dari 30 MB.'),
   'the picker rejects oversized songs before the upload starts'
 );
+ok(
+  photosAction.includes('export async function prepareAssetUpload') &&
+    photosAction.includes('createSignedUploadUrl'),
+  'uploads are authorised with a signed Supabase Storage URL'
+);
+ok(
+  photosAction.includes('export async function saveAssetUrl'),
+  'the public URL is persisted by a small metadata-only action'
+);
+ok(
+  !assetUpload.includes('uploadAsset(null') &&
+    assetUpload.includes('prepareAssetUpload(null') &&
+    assetUpload.includes('saveAssetUrl(null'),
+  'the song bytes never cross the Vercel Server Action body limit'
+);
+ok(
+  assetUpload.includes('catch (cause)'),
+  'a failed music upload stays inline instead of triggering the route error page'
+);
 
 // ---------------------------------------------------------------- summary
 
