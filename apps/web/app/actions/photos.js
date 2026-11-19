@@ -30,27 +30,68 @@ const VIDEO_MIME = new Map([
 const AUDIO_MIME = new Map([
   ['audio/mpeg', 'mp3'],
   ['audio/mp3', 'mp3'],
+  ['audio/mpga', 'mp3'],
   ['audio/mp4', 'm4a'],
   ['audio/x-m4a', 'm4a'],
   ['audio/m4a', 'm4a'],
+  ['audio/aac', 'm4a'],
+  ['audio/x-aac', 'm4a'],
   ['audio/ogg', 'ogg'],
+  ['audio/x-ogg', 'ogg'],
+  ['audio/opus', 'ogg'],
+  ['audio/flac', 'flac'],
+  ['audio/x-flac', 'flac'],
   ['audio/wav', 'wav'],
   ['audio/x-wav', 'wav'],
+  ['audio/wave', 'wav'],
+  ['audio/vnd.wave', 'wav'],
+  ['audio/webm', 'webm'],
 ]);
+
+// Browsers — especially mobile ones — often send an empty or generic MIME
+// type for .m4a / .mp3 files. Fall back to the extension so a valid song is
+// never rejected just because the OS reported a weird content type.
+const AUDIO_EXT = new Map([
+  ['mp3', 'mp3'],
+  ['m4a', 'm4a'],
+  ['aac', 'm4a'],
+  ['ogg', 'ogg'],
+  ['oga', 'ogg'],
+  ['opus', 'ogg'],
+  ['flac', 'flac'],
+  ['wav', 'wav'],
+  ['webm', 'webm'],
+]);
+
+function extensionOf(name) {
+  const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : '';
+}
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
+// A 4–5 minute high-bitrate song or a WAV can exceed 12 MB. Keep the cap
+// under the Supabase free-tier 50 MB upload limit but generous for music.
+const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
 
 function friendlyStorageError(error) {
-  if (!error) return 'Could not save the upload. Please try again.';
-  if (/Bucket not found/i.test(error.message || '')) {
-    return 'Photo storage is not reachable yet. Check that the wedding-photos-2 bucket exists (Public ON) and that database/0005_wedding_photos_2.sql has been applied.';
+  const raw = String(error?.message || '');
+  if (!raw) return 'Gagal menyimpan berkas. Coba lagi.';
+  if (/bucket not found|nosuchbucket/i.test(raw)) {
+    return 'Penyimpanan foto belum tersedia. Pastikan bucket wedding-photos-2 sudah dibuat di Supabase dengan Public ON, lalu jalankan database/0005_wedding_photos_2.sql.';
   }
-  if (/row-level security|security policy|not authorized|must be owner/i.test(error.message || '')) {
-    return 'Your session was rejected while saving the file. Sign in again.';
+  if (/mime|content.?type|not allowed|unsupported|invalid.*type|415/i.test(raw)) {
+    return 'Jenis berkas ini tidak diizinkan. Gunakan MP3, M4A, AAC, OGG, WAV, atau FLAC untuk musik.';
   }
-  return 'Could not save the upload. Please try again.';
+  if (/too large|size limit|payload|413/i.test(raw)) {
+    return 'Ukuran berkas terlalu besar. Kecilkan berkas lalu coba lagi.';
+  }
+  if (/row-level security|security policy|not authorized|must be owner/i.test(raw)) {
+    return 'Sesi Anda ditolak saat menyimpan berkas. Masuk kembali.';
+  }
+  // Surface a trimmed reason so a failed upload is diagnosable instead of a
+  // silent generic message. Never contains credentials — only storage errors.
+  return `Gagal menyimpan berkas: ${raw.slice(0, 160)}`;
 }
 
 /**
@@ -67,29 +108,31 @@ export async function uploadAsset(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
   const slot = cleanLine(formData.get('slot'), 12);
 
-  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Unknown invitation.' };
+  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
   if (!ALL_SLOTS.has(slot)) {
-    return { ok: false, slot, error: 'Unknown upload slot.' };
+    return { ok: false, slot, error: 'Slot unggahan tidak dikenal.' };
   }
 
   const file = formData.get('file');
   if (!file || typeof file !== 'object' || typeof file.name !== 'string') {
-    return { ok: false, slot, error: 'Choose a file first.' };
+    return { ok: false, slot, error: 'Pilih berkas terlebih dahulu.' };
   }
 
   const kind = slot === 'video' ? 'video' : slot === 'music' ? 'audio' : 'image';
   const mimeMap = kind === 'video' ? VIDEO_MIME : kind === 'audio' ? AUDIO_MIME : IMAGE_MIME;
-  const ext = mimeMap.get(file.type);
+  const ext =
+    mimeMap.get(file.type) ||
+    (kind === 'audio' ? AUDIO_EXT.get(extensionOf(file.name)) : '');
   if (!ext) {
     return {
       ok: false,
       slot,
       error:
         kind === 'video'
-          ? 'Use MP4, WebM or MOV.'
+          ? 'Gunakan MP4, WebM, atau MOV.'
           : kind === 'audio'
-            ? 'Use MP3, M4A, OGG or WAV.'
-            : 'Use JPEG, PNG, WebP or AVIF.',
+            ? 'Gunakan MP3, M4A, AAC, OGG, WAV, atau FLAC.'
+            : 'Gunakan JPEG, PNG, WebP, atau AVIF.',
     };
   }
 
@@ -101,15 +144,15 @@ export async function uploadAsset(prevState, formData) {
       slot,
       error:
         kind === 'video'
-          ? 'Video is larger than 40 MB.'
+          ? 'Video lebih besar dari 40 MB.'
           : kind === 'audio'
-            ? 'Music is larger than 12 MB.'
-            : 'Image is larger than 8 MB.',
+            ? 'Berkas musik lebih besar dari 30 MB.'
+            : 'Gambar lebih besar dari 8 MB.',
     };
   }
 
   const { supabase, claims } = await getClaims();
-  if (!claims?.sub) return { ok: false, slot, error: 'Your session expired. Sign in again.' };
+  if (!claims?.sub) return { ok: false, slot, error: 'Sesi habis. Masuk kembali.' };
 
   // RLS: reading the row proves ownership; "not yours" looks identical to
   // "does not exist".
@@ -120,7 +163,7 @@ export async function uploadAsset(prevState, formData) {
     .maybeSingle();
 
   if (readError) return { ok: false, slot, error: friendlyStorageError(readError) };
-  if (!existing) return { ok: false, slot, error: 'Invitation not found.' };
+  if (!existing) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
 
   const content =
     existing.content && typeof existing.content === 'object' ? existing.content : {};
@@ -141,7 +184,7 @@ export async function uploadAsset(prevState, formData) {
 
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path);
   const url = publicData && publicData.publicUrl ? cleanUrl(publicData.publicUrl) : '';
-  if (!url) return { ok: false, slot, error: 'Upload saved, but its URL could not be built.' };
+  if (!url) return { ok: false, slot, error: 'Berkas tersimpan, tetapi tautannya gagal dibuat.' };
 
   const nextPhotos = {
     cover: typeof photos.cover === 'string' ? photos.cover : '',
@@ -192,13 +235,13 @@ export async function removeAsset(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
   const slot = cleanLine(formData.get('slot'), 12);
 
-  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Unknown invitation.' };
+  if (!UUID_RE.test(id)) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
   if (!ALL_SLOTS.has(slot)) {
-    return { ok: false, slot, error: 'Unknown upload slot.' };
+    return { ok: false, slot, error: 'Slot unggahan tidak dikenal.' };
   }
 
   const { supabase, claims } = await getClaims();
-  if (!claims?.sub) return { ok: false, slot, error: 'Your session expired. Sign in again.' };
+  if (!claims?.sub) return { ok: false, slot, error: 'Sesi habis. Masuk kembali.' };
 
   const { data: existing, error: readError } = await supabase
     .from('weddings')
@@ -207,7 +250,7 @@ export async function removeAsset(prevState, formData) {
     .maybeSingle();
 
   if (readError) return { ok: false, slot, error: friendlyStorageError(readError) };
-  if (!existing) return { ok: false, slot, error: 'Invitation not found.' };
+  if (!existing) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
 
   const content =
     existing.content && typeof existing.content === 'object' ? existing.content : {};

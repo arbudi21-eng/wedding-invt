@@ -33,8 +33,27 @@ export default function AssetUpload({
   const upload = () => {
     if (!picked) return;
     setError('');
+
+    const maxBytes =
+      kind === 'video'
+        ? 40 * 1024 * 1024
+        : kind === 'audio'
+          ? 30 * 1024 * 1024
+          : 8 * 1024 * 1024;
+    if (picked.size > maxBytes) {
+      setError(
+        kind === 'video'
+          ? 'Video lebih besar dari 40 MB.'
+          : kind === 'audio'
+            ? 'Berkas musik lebih besar dari 30 MB.'
+            : 'Gambar lebih besar dari 8 MB.'
+      );
+      return;
+    }
+
     startTransition(async () => {
       // Shrink phone photos (often > 8 MB) to fit under the upload cap.
+      // Audio and video pass through untouched.
       const file = await compressImage(picked);
 
       const fd = new FormData();
@@ -100,7 +119,7 @@ export default function AssetUpload({
               kind === 'image'
                 ? 'image/*'
                 : kind === 'audio'
-                  ? 'audio/*,.mp3,.m4a,.ogg,.wav'
+                  ? 'audio/*,.mp3,.m4a,.aac,.ogg,.oga,.opus,.flac,.wav,.webm'
                   : 'video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov'
             }
             onChange={onFileChange}

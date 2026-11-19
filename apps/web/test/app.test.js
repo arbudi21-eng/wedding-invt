@@ -510,6 +510,39 @@ ok(
   'no service_role key in any payment path'
 );
 
+// ---------------------------------------------------------- music uploads
+
+console.log('=== music uploads ===');
+
+const photosAction = read('apps/web/app/actions/photos.js');
+const assetUpload = read('apps/web/components/AssetUpload.jsx');
+
+ok(photosAction.includes("AUDIO_SLOTS = new Set(['music'])"), 'music is a valid upload slot');
+ok(
+  photosAction.includes("['audio/flac', 'flac']"),
+  'common song formats beyond MP3 are accepted'
+);
+ok(
+  photosAction.includes('AUDIO_EXT.get(extensionOf(file.name))'),
+  'audio uploads fall back to the filename extension when MIME is missing'
+);
+ok(
+  photosAction.includes('const MAX_AUDIO_BYTES = 30 * 1024 * 1024'),
+  'a full-length song fits under the music size cap'
+);
+ok(
+  /Gunakan MP3, M4A, AAC, OGG, WAV, atau FLAC/.test(photosAction),
+  'audio format errors are in Bahasa Indonesia'
+);
+ok(
+  assetUpload.includes('.aac,.ogg,.oga,.opus,.flac,.wav,.webm'),
+  'the file picker offers the formats the server accepts'
+);
+ok(
+  assetUpload.includes('Berkas musik lebih besar dari 30 MB.'),
+  'the picker rejects oversized songs before the upload starts'
+);
+
 // ---------------------------------------------------------------- summary
 
 console.log('');
