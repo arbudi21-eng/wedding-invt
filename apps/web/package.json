@@ -7,6 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "gen:templates": "node scripts/gen-templates.mjs",
+    "predev": "npm run gen:templates",
+    "prebuild": "npm run gen:templates",
+    "pretest": "npm run gen:templates",
     "test": "node test/app.test.js"
   },
   "dependencies": {

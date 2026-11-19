@@ -28,7 +28,7 @@ import {
   normalizeContent,
   splitDateISO,
 } from '../lib/draft.js';
-import { buildInvitationHtml } from '../lib/preview.js';
+import { buildInvitationHtml, readDesignHtml, readWiring } from '../lib/preview.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.join(here, '..');
@@ -293,6 +293,7 @@ const appSource = [];
 (function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === '.next' || entry.name === 'test') continue;
+    if (entry.name === 'scripts' || entry.name.includes('.generated.')) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
     else if (/\.(js|mjs)$/.test(entry.name)) appSource.push(full);
@@ -421,6 +422,29 @@ ok(/data-photo="/.test(wiringHtml), 'templates carry data-photo slots');
 ok(
   /Object\.assign\(CFG,\{[\s\S]*?\}\);[\s\S]*?var map=\{cover:CFG\.cover/.test(wiringHtml),
   'the photo-slot wiring is injected directly after the CFG patch'
+);
+
+// ------------------------------------------------------- bundled templates
+
+console.log('=== bundled templates ===');
+
+// The generator reads templates from lib/templates.generated.js, which is
+// inlined from <repo>/designs and <repo>/templates at build time. It must stay
+// byte-identical to the source files, or the deployed app would ship a stale
+// design. Regenerate with: npm run gen:templates
+let staleDesigns = 0;
+for (const id of designFiles) {
+  const raw = fs.readFileSync(path.join(repoRoot, 'designs', `${id}.html`), 'utf8');
+  if (readDesignHtml(id) !== raw) {
+    staleDesigns += 1;
+    console.log(`  FAIL: ${id} bundled template is stale — run npm run gen:templates`);
+  }
+}
+eq(staleDesigns, 0, `all ${designFiles.length} bundled templates match designs/<id>.html`);
+eq(
+  readWiring(),
+  fs.readFileSync(path.join(repoRoot, 'templates', 'wiring.js'), 'utf8'),
+  'bundled wiring matches templates/wiring.js'
 );
 
 // ---------------------------------------------------------------- summary

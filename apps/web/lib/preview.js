@@ -6,24 +6,26 @@
 // view) all render. The raw Wed-Inv files in public/designs/ are sample
 // output and stay available for static comparison; this module personalizes
 // them with real content.
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import core from './core.js';
 import { normalizeContent } from './draft.js';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-// apps/web/lib -> repo root is three levels up
-const repoRoot = path.resolve(here, '..', '..', '..');
+// Templates are inlined at build time (scripts/gen-templates.mjs) so they ship
+// inside the server bundle. Reading them from disk at request time works in dev
+// but not on Vercel, where <repo>/designs and <repo>/templates sit outside the
+// app's Root Directory and are absent from the serverless function.
+import { DESIGNS as DESIGN_HTML, WIRING } from './templates.generated.js';
 
 /** Raw Wed-Inv template for a design id. Source of truth: <repo>/designs/. */
 export function readDesignHtml(designId) {
-  return fs.readFileSync(path.join(repoRoot, 'designs', `${designId}.html`), 'utf8');
+  const html = DESIGN_HTML[designId];
+  if (typeof html !== 'string') {
+    throw new Error(`Unknown design: ${designId}`);
+  }
+  return html;
 }
 
 /** Placeholder wiring — WedCore embeds its own copy inside lib/core.js. */
 export function readWiring() {
-  return fs.readFileSync(path.join(repoRoot, 'templates', 'wiring.js'), 'utf8');
+  return WIRING;
 }
 
 function assetsFromContent(content) {
