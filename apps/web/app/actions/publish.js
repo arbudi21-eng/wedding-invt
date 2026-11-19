@@ -304,6 +304,19 @@ export async function publishInvitation(prevState, formData) {
   const { supabase, claims } = await getClaims();
   if (!claims?.sub) return { ok: false, error: 'Sesi habis. Masuk kembali.' };
 
+  const { data: existing, error: readError } = await supabase
+    .from('weddings')
+    .select('slug, status')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (readError) return { ok: false, error: 'Gagal terbitkan undangan. Coba lagi.' };
+  if (!existing) return { ok: false, error: 'Undangan tidak ditemukan.' };
+  if (existing.status === 'published') {
+    revalidateManage(existing.slug);
+    return { ok: true, slug: existing.slug };
+  }
+
   const { data, error } = await supabase
     .from('weddings')
     .update({ status: 'published', published_at: new Date().toISOString() })

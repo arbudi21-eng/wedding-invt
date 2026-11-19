@@ -110,14 +110,11 @@ export default async function ManagePage({ params }) {
                 <h2>Sudah tayang</h2>
                 <p className="muted" style={{ margin: 0 }}>
                   Undangan Anda dapat dibagikan di <code className="slug">/{wedding.slug}</code>.
-                  Perubahan yang disimpan di studio akan tayang pada penerbitan berikutnya.
+                  Undangan yang sudah diterbitkan tidak dapat diubah lagi.
                 </p>
                 <div className="hero-actions" style={{ margin: 0 }}>
                   <Link className="button" href={`/${wedding.slug}`} target="_blank" rel="noreferrer">
                     Lihat undangan
-                  </Link>
-                  <Link className="button secondary" href={`/build/${wedding.id}`}>
-                    Edit undangan
                   </Link>
                   <Link className="button secondary" href={`/manage/${wedding.slug}/kirim`}>
                     Kirim undangan
@@ -172,9 +169,6 @@ export default async function ManagePage({ params }) {
                 rel="noreferrer"
               >
                 Pratinjau undangan
-              </Link>
-              <Link className="button secondary" href={`/build/${wedding.id}`}>
-                Terus mengedit
               </Link>
             </section>
           ) : (

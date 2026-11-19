@@ -273,6 +273,34 @@ export default function DraftForm({ wedding, content }) {
     )
   );
 
+  const isPublished = wedding.status === 'published';
+
+  if (isPublished) {
+    return (
+      <section className="card stack" style={{ gap: '1rem', maxWidth: '48rem' }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          <h2>Undangan sudah diterbitkan</h2>
+          <span>Tidak dapat diubah</span>
+        </div>
+        <p className="muted" style={{ margin: 0 }}>
+          Undangan yang sudah diterbitkan tidak dapat diubah lagi. Anda masih bisa melihat
+          undangan dan mengelola tamu.
+        </p>
+        <div className="hero-actions" style={{ margin: 0 }}>
+          <Link className="button" href={`/${wedding.slug}`} target="_blank" rel="noreferrer">
+            Lihat undangan
+          </Link>
+          <Link className="button secondary" href={`/manage/${wedding.slug}`}>
+            Kelola undangan
+          </Link>
+          <Link className="button secondary" href={`/manage/${wedding.slug}/kirim`}>
+            Kirim undangan
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   const setUpload = (slot, url) => {
     if (slot === 'video') {
       setVideoSrc(url);

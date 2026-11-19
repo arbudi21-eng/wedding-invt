@@ -71,12 +71,15 @@ export async function saveDraft(prevState, formData) {
   // would wipe every uploaded photo and video.
   const { data: existing, error: readError } = await supabase
     .from('weddings')
-    .select('content')
+    .select('content, status')
     .eq('id', id)
     .maybeSingle();
 
   if (readError) return { errors: {}, error: friendlyDbError(readError) };
   if (!existing) return { errors: {}, error: 'Invitation not found.' };
+  if (existing.status === 'published') {
+    return { errors: {}, error: 'Undangan yang sudah diterbitkan tidak dapat diubah.' };
+  }
 
   const merged = {
     ...parsed.content,

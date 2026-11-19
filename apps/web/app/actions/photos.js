@@ -167,9 +167,16 @@ function contentWithAsset(existing, slot, kind, url) {
 
 /** Verify the caller owns the invitation and return its current content. */
 async function readOwnedWedding(supabase, id, slot) {
-  const { data, error } = await supabase.from('weddings').select('content').eq('id', id).maybeSingle();
+  const { data, error } = await supabase
+    .from('weddings')
+    .select('content, status')
+    .eq('id', id)
+    .maybeSingle();
   if (error) return { error: { ok: false, slot, error: friendlyStorageError(error) } };
   if (!data) return { error: { ok: false, slot, error: 'Undangan tidak ditemukan.' } };
+  if (data.status === 'published') {
+    return { error: { ok: false, slot, error: 'Undangan yang sudah diterbitkan tidak dapat diubah.' } };
+  }
   return { data };
 }
 
@@ -335,12 +342,15 @@ export async function removeAsset(prevState, formData) {
 
   const { data: existing, error: readError } = await supabase
     .from('weddings')
-    .select('content')
+    .select('content, status')
     .eq('id', id)
     .maybeSingle();
 
   if (readError) return { ok: false, slot, error: friendlyStorageError(readError) };
   if (!existing) return { ok: false, slot, error: 'Undangan tidak ditemukan.' };
+  if (existing.status === 'published') {
+    return { ok: false, slot, error: 'Undangan yang sudah diterbitkan tidak dapat diubah.' };
+  }
 
   const content =
     existing.content && typeof existing.content === 'object' ? existing.content : {};

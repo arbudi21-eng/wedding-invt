@@ -109,9 +109,15 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                   <div className="draft-actions">
-                    <Link className="button small" href={`/build/${wedding.id}`}>
-                      Edit
-                    </Link>
+                    {wedding.status === 'published' ? (
+                      <Link className="button small" href={`/${wedding.slug}`} target="_blank" rel="noreferrer">
+                        Lihat
+                      </Link>
+                    ) : (
+                      <Link className="button small" href={`/build/${wedding.id}`}>
+                        Edit
+                      </Link>
+                    )}
                     <Link className="button small secondary" href={`/manage/${wedding.slug}`}>
                       Manage
                     </Link>

@@ -34,6 +34,10 @@ export default async function BuildPage({ params }) {
   }
   if (!wedding) notFound();
 
+  if (wedding.status === 'published') {
+    redirect(`/manage/${wedding.slug}`);
+  }
+
   const content = normalizeContent(wedding.content);
 
   return (
