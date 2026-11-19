@@ -27,7 +27,7 @@ export default function HomePage() {
             <p className={styles.eyebrow}>Undangan pernikahan, tanpa biaya agensi</p>
             <h1 className={styles.title}>Buat sendiri. Terbitkan saat semuanya siap.</h1>
             <p className={styles.lede}>
-              Pilih satu dari 33 desain, tulis kisah Anda, lengkapi tempat dan jadwal, lalu bagikan
+              Pilih satu dari 45 desain, tulis kisah Anda, lengkapi tempat dan jadwal, lalu bagikan
               satu tautan. Tamu bisa konfirmasi kehadiran dan memberi ucapan langsung dari
               undangan — tanpa mengunduh aplikasi.
             </p>
@@ -117,7 +117,7 @@ export default function HomePage() {
 
         <section className={styles.features} aria-label="Yang Anda dapatkan">
           <article className={styles.feature}>
-            <h3>33 tema desain</h3>
+            <h3>45 tema desain</h3>
             <p>Dari editorial netral hingga batik nusantara dan celestial. Ganti desain tanpa mengubah tulisan Anda.</p>
           </article>
           <article className={styles.feature}>

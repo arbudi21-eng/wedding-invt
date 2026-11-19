@@ -1,4 +1,4 @@
-// The 33 designs shipped in <repo>/designs. The id is the filename stem, which
+// The 45 designs shipped in <repo>/designs. The id is the filename stem, which
 // is what `build()` loads and what the database design constraint accepts.
 
 export const DESIGNS = [
@@ -35,6 +35,18 @@ export const DESIGNS = [
   { id: '31-javanese-manuscript', name: 'Javanese Manuscript' },
   { id: '32-sacred-geometry', name: 'Sacred Geometry' },
   { id: '33-cinematic-reel', name: 'Cinematic Reel' },
+  { id: '34-polaroid-scrapbook', name: 'Polaroid Scrapbook' },
+  { id: '35-admit-one', name: 'Admit One' },
+  { id: '36-magazine-cover', name: 'Magazine Cover' },
+  { id: '37-cinematic', name: 'Cinematic' },
+  { id: '38-playful-blobs', name: 'Playful Blobs' },
+  { id: '39-letterpress-card', name: 'Letterpress Card' },
+  { id: '40-broadsheet', name: 'Broadsheet' },
+  { id: '41-neon-night', name: 'Neon Night' },
+  { id: '42-arch-window', name: 'Arch Window' },
+  { id: '43-bauhaus-blocks', name: 'Bauhaus Blocks' },
+  { id: '44-aurora-glass', name: 'Aurora Glass' },
+  { id: '45-zen-ink', name: 'Zen Ink' },
 ];
 
 export const DEFAULT_DESIGN = '01-editorial-mocha';

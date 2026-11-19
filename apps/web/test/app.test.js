@@ -80,7 +80,7 @@ const designFiles = fs
 
 const designIds = DESIGNS.map((d) => d.id).sort();
 
-eq(DESIGNS.length, 33, 'exactly 33 designs are offered');
+eq(DESIGNS.length, 45, 'exactly 45 designs are offered');
 eq(
   JSON.stringify(designIds),
   JSON.stringify(designFiles),
