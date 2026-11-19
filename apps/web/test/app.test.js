@@ -447,6 +447,69 @@ eq(
   'bundled wiring matches templates/wiring.js'
 );
 
+// ------------------------------------------------------- publish payments
+
+console.log('=== publish payments ===');
+
+const publishAction = read('apps/web/app/actions/publish.js');
+const publishForm = read('apps/web/app/manage/[slug]/PublishForm.jsx');
+const managePage = read('apps/web/app/manage/[slug]/page.js');
+const dokuWebhook = read('apps/web/app/api/payments/doku/route.js');
+const dokuMcp = read('apps/web/lib/doku/mcp.js');
+const paymentsSql = read('database/0006_payments.sql');
+
+ok(publishAction.includes("from '@/lib/doku/mcp'"), 'publish actions use the DOKU MCP client');
+ok(
+  !publishAction.includes('@/lib/doku/snap'),
+  'publish actions no longer call the unverified SNAP client'
+);
+ok(
+  publishAction.includes('const PUBLISH_PRICE_IDR = 100000'),
+  'publishing costs one flat Rp 100.000'
+);
+ok(
+  publishAction.includes("new Set(['SAGALA'])"),
+  'the promo value is validated only on the server'
+);
+ok(
+  publishAction.includes('export async function createDokuPayment(prevState, formData)'),
+  'createDokuPayment matches the useActionState signature'
+);
+ok(
+  publishAction.includes('export async function checkDokuPayment(prevState, formData)'),
+  'checkDokuPayment matches the useActionState signature'
+);
+ok(!publishForm.includes('SAGALA'), 'the promo code is not shipped in the client form');
+ok(!/dku_key_|api_key_/.test(publishForm), 'no DOKU key format is shipped to the browser');
+ok(
+  publishForm.includes('checkDokuPayment'),
+  'the client verifies payment through the authenticated action'
+);
+ok(publishForm.includes('<img'), 'the client renders the QRIS image');
+ok(publishForm.includes('Cek status pembayaran'), 'manual status check is available');
+ok(dokuMcp.includes('/^api_key_/i'), 'the MCP client rejects legacy key formats');
+ok(dokuMcp.includes('create_qris_payment'), 'the MCP client creates QRIS via the live tool');
+ok(
+  dokuMcp.includes('get_transaction_by_invoice_number'),
+  'the MCP client queries invoices via the live tool'
+);
+ok(!dokuWebhook.includes('@/lib/supabase'), 'the DOKU webhook never imports Supabase');
+ok(!dokuWebhook.includes("from('weddings')"), 'the DOKU webhook performs no database writes');
+ok(managePage.includes('payment_qr_content'), 'the manage page loads the saved QRIS');
+ok(
+  managePage.includes('paymentsReady'),
+  'the manage page degrades when the payment migration is missing'
+);
+ok(paymentsSql.includes('amount_idr = 100000'), 'the migration enforces the flat price');
+ok(
+  paymentsSql.includes('weddings_payment_invoice_key'),
+  'the migration enforces unique DOKU invoices'
+);
+ok(
+  !/service_role/.test(publishAction + dokuMcp + dokuWebhook),
+  'no service_role key in any payment path'
+);
+
 // ---------------------------------------------------------------- summary
 
 console.log('');

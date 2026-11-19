@@ -1,55 +1,45 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import QRCode from 'qrcode';
 import { getClaims } from '@/lib/supabase/server';
 import { cleanLine } from '@/lib/draft';
+import { createQris, isDokuConfigured, queryQris } from '@/lib/doku/mcp';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// One flat price for every invitation: RP 100.000.
+// One flat price for every invitation: Rp 100.000.
 const PUBLISH_PRICE_IDR = 100000;
 
-// Promo codes that waive the payment entirely.
-// Visible in the promo field on the manage page.
+// Server-only. The promo value is never rendered or shipped to the browser.
 const FREE_PROMO_CODES = new Set(['SAGALA']);
 
-/**
- * @typedef {Object} PublishResultOk
- * @property {boolean} ok - always true
- * @property {string} slug
- * @property {boolean} paid
- * @property {number} amountIdr
- */
-/**
- * @typedef {Object} PublishResultFail
- * @property {boolean} ok - always false
- * @property {string} error
- * @property {boolean} [paymentRequired]
- * @property {number} [amountIdr]
- */
-/**
- * @typedef {PublishResultOk | PublishResultFail} PublishResult
- */
+function revalidateManage(slug) {
+  revalidatePath('/dashboard');
+  revalidatePath('/manage');
+  revalidatePath(`/manage/${slug}`);
+}
+
+function currency(idr) {
+  return `Rp ${Number(idr).toLocaleString('id-ID')}`;
+}
+
+const PAYMENT_UNAVAILABLE =
+  'Fitur pembayaran belum aktif. Hubungi pemilik toko untuk menyiapkan tabel pembayaran.';
+
+/** The payment migration has not been applied in Supabase yet. */
+function paymentSchemaMissing(error) {
+  const message = String(error?.message || '');
+  return error?.code === '42703' || /does not exist|undefined column/i.test(message);
+}
 
 /**
- * @typedef {Object} DokuPaymentResult
- * @property {boolean} ok
- * @property {string} [checkoutUrl] - URL to redirect the user to for DOKU payment
- * @property {string} [error]
- */
-
-/**
- * Publish an invitation with a single flat payment of RP 100.000.
+ * Resolve whether a submitted promo waives the fee, then either publish for
+ * free or mark the invitation as awaiting a Rp 100.000 DOKU payment.
  *
- * If a valid promo code is supplied (currently only SAGALA), publication is
- * free and no payment is required. Otherwise the caller must pay PUBLISH_PRICE_IDR
- * through DOKU before the invitation flips to `published`.
- *
- * Ownership is enforced by RLS (owner only) and the caller's Supabase session.
- *
- * @param {object} prevState
- * @param {FormData} formData
- * @returns {Promise<PublishResult>}
+ * Ownership is enforced by the owner-only RLS policies and the caller's
+ * Supabase session — never by a privileged database key.
  */
 export async function publishWithPayment(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
@@ -63,17 +53,21 @@ export async function publishWithPayment(prevState, formData) {
 
   const { data: existing, error: readError } = await supabase
     .from('weddings')
-    .select('id, slug, status, payment_status, amount_idr, promo_code_used')
+    .select('id, slug, status, payment_status, amount_idr')
     .eq('id', id)
     .maybeSingle();
 
-  if (readError) return { ok: false, error: 'Gagal memuat undangan. Coba lagi.' };
+  if (readError) {
+    return {
+      ok: false,
+      error: paymentSchemaMissing(readError) ? PAYMENT_UNAVAILABLE : 'Gagal memuat undangan. Coba lagi.',
+    };
+  }
   if (!existing) return { ok: false, error: 'Undangan tidak ditemukan.' };
   if (existing.status === 'published') {
     return { ok: true, slug: existing.slug, paid: true, amountIdr: existing.amount_idr ?? 0 };
   }
 
-  // Free via promo code — publish immediately, no payment.
   if (isFree) {
     const { data, error } = await supabase
       .from('weddings')
@@ -82,25 +76,25 @@ export async function publishWithPayment(prevState, formData) {
         published_at: new Date().toISOString(),
         payment_status: 'free',
         amount_idr: 0,
+        payment_required: false,
         promo_code_used: String(promoCode).toUpperCase(),
       })
       .eq('id', id)
       .select('slug')
       .maybeSingle();
 
-    if (error) return { ok: false, error: 'Gagal terbitkan undangan. Coba lagi.' };
+    if (error) {
+      return {
+        ok: false,
+        error: paymentSchemaMissing(error) ? PAYMENT_UNAVAILABLE : 'Gagal terbitkan undangan. Coba lagi.',
+      };
+    }
     if (!data) return { ok: false, error: 'Undangan tidak ditemukan.' };
 
-    revalidatePath('/dashboard');
-    revalidatePath('/manage');
-    revalidatePath(`/manage/${data.slug}`);
-
+    revalidateManage(data.slug);
     return { ok: true, slug: data.slug, paid: true, amountIdr: 0 };
   }
 
-  // Paid path: require RP 100.000 via DOKU.
-  // Record a pending payment record. The client will create a DOKU payment
-  // transaction via createDokuPayment and redirect to DOKU checkout.
   const { data, error } = await supabase
     .from('weddings')
     .update({
@@ -109,28 +103,34 @@ export async function publishWithPayment(prevState, formData) {
       payment_required: true,
     })
     .eq('id', id)
-    .select('slug, payment_status, amount_idr')
+    .select('slug')
     .maybeSingle();
 
-  if (error) return { ok: false, error: 'Gagal mencatat pembayaran. Coba lagi.' };
+  if (error) {
+    return {
+      ok: false,
+      error: paymentSchemaMissing(error) ? PAYMENT_UNAVAILABLE : 'Gagal mencatat pembayaran. Coba lagi.',
+    };
+  }
   if (!data) return { ok: false, error: 'Undangan tidak ditemukan.' };
 
   return {
     ok: false,
-    error: `Pembayaran Rp ${PUBLISH_PRICE_IDR.toLocaleString('id-ID')} diperlukan sebelum terbitkan.`,
+    error: `Pembayaran ${currency(PUBLISH_PRICE_IDR)} diperlukan sebelum terbitkan.`,
     paymentRequired: true,
     amountIdr: PUBLISH_PRICE_IDR,
   };
 }
 
 /**
- * Create a DOKU payment transaction for the invitation.
- * Returns a checkout URL the client should redirect to.
+ * Generate a DOKU MCP dynamic QRIS for the flat publish fee and store the
+ * invoice on the invitation so its status can be queried later.
  *
- * @param {FormData} formData - must include 'id' (wedding UUID)
- * @returns {Promise<DokuPaymentResult>}
+ * The `(prevState, formData)` shape is required by React's useActionState.
+ *
+ * @returns {Promise<{ok: boolean, qrDataUrl?: string, invoiceNumber?: string, error?: string}>}
  */
-export async function createDokuPayment(formData) {
+export async function createDokuPayment(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
   if (!UUID_RE.test(id)) return { ok: false, error: 'Undangan tidak diketahui.' };
 
@@ -139,120 +139,163 @@ export async function createDokuPayment(formData) {
 
   const { data: wedding, error: readError } = await supabase
     .from('weddings')
-    .select('id, slug, status, payment_status, amount_idr, content')
+    .select(
+      'id, slug, status, payment_status, amount_idr, payment_invoice_number, payment_reference_no, payment_qr_content, content'
+    )
     .eq('id', id)
     .maybeSingle();
 
-  if (readError) return { ok: false, error: 'Gagal memuat undangan.' };
-  if (!wedding) return { ok: false, error: 'Undangan tidak ditemukan.' };
-  if (wedding.status === 'published') {
-    return { ok: false, error: 'Undangan sudah diterbitkan.' };
+  if (readError) {
+    return {
+      ok: false,
+      error: paymentSchemaMissing(readError) ? PAYMENT_UNAVAILABLE : 'Gagal memuat undangan.',
+    };
   }
+  if (!wedding) return { ok: false, error: 'Undangan tidak ditemukan.' };
+  if (wedding.status === 'published') return { ok: false, error: 'Undangan sudah diterbitkan.' };
   if (wedding.payment_status !== 'pending') {
     return { ok: false, error: 'Pembayaran belum dalam status pending.' };
   }
-
-  const apiUrl = process.env.DOKU_API_URL || 'https://api.doku.com';
-  const clientKey = process.env.DOKU_CLIENT_KEY;
-  const apiKey = process.env.DOKU_API_KEY;
-
-  if (!clientKey || !apiKey) {
-    return { ok: false, error: 'DOKU tidak dikonfigurasi di server.' };
+  if (!isDokuConfigured()) {
+    return { ok: false, error: 'Pembayaran DOKU belum dikonfigurasi di server.' };
   }
 
-  // Build the DOKU payment request. Exact field names depend on your DOKU
-  // account configuration; adjust to match DOKU's API documentation.
-  const orderId = `INV-${id.slice(0, 8)}-${Date.now()}`;
-  const returnUrl = `${process.env.SITE_URL || 'http://localhost:3001'}/api/payments/doku`;
-  const callbackUrl = `${process.env.SITE_URL || 'http://localhost:3001'}/api/payments/doku`;
+  // Reuse an unexpired QR rather than generating duplicates on every click.
+  if (wedding.payment_qr_content) {
+    try {
+      return {
+        ok: true,
+        invoiceNumber: wedding.payment_invoice_number || '',
+        qrDataUrl: await QRCode.toDataURL(wedding.payment_qr_content, {
+          width: 320, margin: 2, errorCorrectionLevel: 'M',
+        }),
+      };
+    } catch {
+      // Fall through and regenerate a fresh QR.
+    }
+  }
+
+  // UUID keeps the invoice unique even when two owners publish at the same ms.
+  const partnerReferenceNo = `WED-${id.slice(0, 8)}-${randomUUID().slice(0, 8)}`;
+  const qr = await createQris({
+    partnerReferenceNo,
+    amountIdr: PUBLISH_PRICE_IDR,
+    postalCode: cleanLine(wedding.content?.postalCode, 5) || undefined,
+  });
+
+  if (!qr.ok || !qr.qrContent) {
+    return { ok: false, error: qr.error || 'DOKU tidak mengembalikan QRIS.' };
+  }
+
+  const { error: updateError } = await supabase
+    .from('weddings')
+    .update({
+      payment_invoice_number: qr.partnerReferenceNo,
+      payment_reference_no: qr.referenceNo || qr.partnerReferenceNo,
+      payment_qr_content: qr.qrContent,
+      amount_idr: PUBLISH_PRICE_IDR,
+      payment_status: 'pending',
+    })
+    .eq('id', id)
+    .eq('payment_status', 'pending');
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: paymentSchemaMissing(updateError) ? PAYMENT_UNAVAILABLE : 'Gagal menyimpan QRIS. Coba lagi.',
+    };
+  }
 
   try {
-    const resp = await fetch(`${apiUrl}/transactions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-Key': clientKey,
-        'Api-Key': apiKey,
-      },
-      body: JSON.stringify({
-        orderId,
-        amount: PUBLISH_PRICE_IDR,
-        currency: 'IDR',
-        returnUrl,
-        callbackUrl,
-        customerName: wedding.content?.names?.join(' & ') || 'Pelanggan',
-        description: `Publish undangan pernikahan ${wedding.slug}`,
-        metadata: { weddingId: id },
-      }),
+    const qrDataUrl = await QRCode.toDataURL(qr.qrContent, {
+      width: 320, margin: 2, errorCorrectionLevel: 'M',
     });
-
-    const result = await resp.json();
-
-    if (!resp.ok) {
-      return { ok: false, error: `DOKU error: ${result.message || resp.status}` };
-    }
-
-    // DOKU typically returns a payment URL / redirectUrl / invoiceUrl
-    const checkoutUrl =
-      result.redirectUrl ||
-      result.paymentUrl ||
-      result.invoiceUrl ||
-      result.url;
-
-    if (!checkoutUrl) {
-      return { ok: false, error: 'DOKU tidak mengembalikan URL pembayaran.' };
-    }
-
-    return { ok: true, checkoutUrl };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'DOKU request gagal.' };
+    return { ok: true, invoiceNumber: qr.partnerReferenceNo, qrDataUrl };
+  } catch {
+    return { ok: false, error: 'Gagal menampilkan QRIS. Coba lagi.' };
   }
 }
 
 /**
- * Confirm a completed payment and publish the invitation.
- * Called after DOKU webhook / return URL confirms payment.
- *
- * @param {FormData} formData
- * @returns {Promise<{ok: boolean, slug?: string, error?: string}>}
+ * Ask DOKU for the transaction status. Only DOKU's authoritative success
+ * response with the exact Rp 100.000 amount publishes the invitation.
+ * Called by the authenticated manage page (polling + manual button).
  */
-export async function confirmPayment(formData) {
+export async function checkDokuPayment(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
   if (!UUID_RE.test(id)) return { ok: false, error: 'Undangan tidak diketahui.' };
 
   const { supabase, claims } = await getClaims();
   if (!claims?.sub) return { ok: false, error: 'Sesi habis. Masuk kembali.' };
 
-  const { data, error } = await supabase
+  const { data: wedding, error: readError } = await supabase
     .from('weddings')
-    .update({
-      status: 'published',
-      published_at: new Date().toISOString(),
-      payment_status: 'paid',
-      payment_required: false,
-    })
+    .select(
+      'id, slug, status, payment_status, amount_idr, payment_invoice_number, payment_reference_no'
+    )
     .eq('id', id)
-    .eq('payment_status', 'pending')
-    .select('slug')
     .maybeSingle();
 
-  if (error) return { ok: false, error: 'Gagal mengonfirmasi pembayaran.' };
-  if (!data) return { ok: false, error: 'Pembayaran belum tertunda atau undangan tidak ditemukan.' };
+  if (readError) {
+    return {
+      ok: false,
+      error: paymentSchemaMissing(readError) ? PAYMENT_UNAVAILABLE : 'Gagal memuat undangan.',
+    };
+  }
+  if (!wedding) return { ok: false, error: 'Undangan tidak ditemukan.' };
+  if (wedding.status === 'published') return { ok: true, paid: true, slug: wedding.slug };
+  if (wedding.payment_status !== 'pending') {
+    return { ok: false, error: 'Pembayaran tidak dalam status pending.' };
+  }
+  if (!wedding.payment_invoice_number) {
+    return { ok: false, error: 'QRIS belum dibuat. Coba lagi.' };
+  }
+  if (!isDokuConfigured()) {
+    return { ok: false, error: 'Pembayaran DOKU belum dikonfigurasi di server.' };
+  }
 
-  revalidatePath('/dashboard');
-  revalidatePath('/manage');
-  revalidatePath(`/manage/${data.slug}`);
+  const result = await queryQris({
+    partnerReferenceNo: wedding.payment_invoice_number,
+    expectedAmountIdr: wedding.amount_idr || PUBLISH_PRICE_IDR,
+  });
 
-  return { ok: true, slug: data.slug };
+  if (!result.ok) return { ok: false, error: result.error || 'Gagal cek status DOKU.' };
+
+  if (result.status === 'paid') {
+    const { data, error } = await supabase
+      .from('weddings')
+      .update({
+        status: 'published',
+        published_at: new Date().toISOString(),
+        payment_status: 'paid',
+        payment_required: false,
+      })
+      .eq('id', id)
+      .eq('payment_status', 'pending')
+      .select('slug')
+      .maybeSingle();
+
+    if (error) return { ok: false, error: 'Gagal mengonfirmasi pembayaran.' };
+    if (!data) return { ok: false, error: 'Pembayaran sudah dikonfirmasi.' };
+
+    revalidateManage(data.slug);
+    return { ok: true, paid: true, slug: data.slug };
+  }
+
+  if (result.status === 'failed') {
+    await supabase
+      .from('weddings')
+      .update({ payment_status: 'failed' })
+      .eq('id', id)
+      .eq('payment_status', 'pending');
+  }
+
+  return { ok: true, paid: false, status: result.status };
 }
 
 /**
  * Legacy alias kept so existing call sites (dev-skip-publish, etc.) keep working.
  * Always publishes for free — no payment, no promo.
- *
- * @param {object} prevState
- * @param {FormData} formData
- * @returns {Promise<PublishResult>}
  */
 export async function publishInvitation(prevState, formData) {
   const id = cleanLine(formData.get('id'), 40);
@@ -271,9 +314,6 @@ export async function publishInvitation(prevState, formData) {
   if (error) return { ok: false, error: 'Gagal terbitkan undangan. Coba lagi.' };
   if (!data) return { ok: false, error: 'Undangan tidak ditemukan.' };
 
-  revalidatePath('/dashboard');
-  revalidatePath('/manage');
-  revalidatePath(`/manage/${data.slug}`);
-
+  revalidateManage(data.slug);
   return { ok: true, slug: data.slug };
 }
