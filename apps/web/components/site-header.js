@@ -7,6 +7,7 @@ export default function SiteHeader({ email }) {
         Wedding Studio
       </Link>
       <nav className="site-nav" aria-label="Account">
+        <Link href="/panduan">Panduan</Link>
         {email ? (
           <>
             <span className="who" title={email}>
