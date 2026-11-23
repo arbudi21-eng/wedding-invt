@@ -33,7 +33,7 @@ export default function LoginForm({ next, initialError }) {
         </div>
 
         <div className="field">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Kata sandi</label>
           <input
             id="password"
             name="password"

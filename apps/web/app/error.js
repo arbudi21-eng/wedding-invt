@@ -6,17 +6,17 @@ export default function ErrorPage({ reset }) {
   return (
     <main className="narrow">
       <div className="card">
-        <p className="eyebrow">Something broke</p>
-        <h1>We could not load this page</h1>
+        <p className="eyebrow">Terjadi kendala</p>
+        <h1>Halaman ini tidak dapat dimuat</h1>
         <p className="muted">
-          Nothing was lost. Try again, or go back to your dashboard and reopen the invitation.
+          Tidak ada yang hilang. Coba lagi, atau kembali ke dasbor dan buka undangan Anda.
         </p>
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
           <button className="button" type="button" onClick={() => reset()}>
-            Try again
+            Coba lagi
           </button>
           <Link className="button secondary" href="/dashboard">
-            Dashboard
+            Dasbor
           </Link>
         </div>
       </div>

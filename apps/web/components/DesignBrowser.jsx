@@ -29,8 +29,8 @@ export default function DesignBrowser() {
     <div className="studio-gallery">
       <div className="section-title">
         <div>
-          <p className="eyebrow">Design gallery</p>
-          <h2>Choose the look</h2>
+          <p className="eyebrow">Galeri desain</p>
+          <h2>Pilih tampilan</h2>
         </div>
         <div className="view-toggle" role="group" aria-label="Gallery layout">
           <button
@@ -76,7 +76,7 @@ export default function DesignBrowser() {
                   <span className="design-meta">
                     <span className="design-name-row">
                       <strong>{design.name}</strong>
-                      {active ? <span className="selected-pill">Selected</span> : null}
+                      {active ? <span className="selected-pill">Dipilih</span> : null}
                     </span>
                     <small>{design.id}</small>
                   </span>
@@ -87,7 +87,7 @@ export default function DesignBrowser() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Open full preview ↗
+                  Buka pratinjau
                 </a>
               </li>
             );
@@ -119,7 +119,7 @@ export default function DesignBrowser() {
                   <span className="design-meta">
                     <span className="design-name-row">
                       <strong>{design.name}</strong>
-                      {active ? <span className="selected-pill">Selected</span> : null}
+                      {active ? <span className="selected-pill">Dipilih</span> : null}
                     </span>
                     <small>{design.id}</small>
                   </span>
@@ -130,7 +130,7 @@ export default function DesignBrowser() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Preview ↗
+                  Pratinjau
                 </a>
               </li>
             );

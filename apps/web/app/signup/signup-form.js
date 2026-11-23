@@ -34,7 +34,7 @@ export default function SignupForm() {
         </div>
 
         <div className="field">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password">Kata sandi</label>
           <input
             id="password"
             name="password"
@@ -43,11 +43,11 @@ export default function SignupForm() {
             minLength={8}
             required
           />
-          <span className="hint">At least 8 characters.</span>
+          <span className="hint">Minimal 8 karakter.</span>
         </div>
 
         <div className="field">
-          <label htmlFor="confirm">Confirm password</label>
+          <label htmlFor="confirm">Konfirmasi kata sandi</label>
           <input
             id="confirm"
             name="confirm"
@@ -59,17 +59,17 @@ export default function SignupForm() {
         </div>
 
         <button className="button" type="submit" disabled={pending}>
-          {pending ? 'Creating account…' : 'Create account'}
+          {pending ? 'Membuat akun…' : 'Buat akun'}
         </button>
       </form>
 
       <div className="divider" style={{ margin: '1.25rem 0' }}>
-        or
+        atau
       </div>
 
       <form action={signInWithGoogle}>
         <button className="button secondary" type="submit" style={{ width: '100%' }}>
-          Continue with Google
+          Lanjutkan dengan Google
         </button>
       </form>
     </>

@@ -16,12 +16,12 @@ function safeNext(value) {
 }
 
 function authMessage(error) {
-  const message = String(error?.message || 'Something went wrong. Please try again.');
-  if (/invalid login credentials/i.test(message)) return 'That email and password do not match.';
-  if (/email not confirmed/i.test(message)) return 'Confirm your email address first — check your inbox.';
-  if (/user already registered/i.test(message)) return 'That email already has an account. Sign in instead.';
+  const message = String(error?.message || 'Terjadi kesalahan. Silakan coba lagi.');
+  if (/invalid login credentials/i.test(message)) return 'Email atau kata sandi tidak cocok.';
+  if (/email not confirmed/i.test(message)) return 'Konfirmasi alamat email Anda terlebih dahulu — periksa kotak masuk.';
+  if (/user already registered/i.test(message)) return 'Email ini sudah terdaftar. Silakan masuk.';
   if (/password should be at least/i.test(message)) return message;
-  if (/rate limit|too many/i.test(message)) return 'Too many attempts. Wait a minute and try again.';
+  if (/rate limit|too many/i.test(message)) return 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.';
   return message;
 }
 
@@ -31,7 +31,7 @@ export async function login(prevState, formData) {
   const next = safeNext(formData.get('next'));
 
   if (!email || !password) {
-    return { error: 'Enter both your email and password.' };
+    return { error: 'Masukkan email dan kata sandi Anda.' };
   }
 
   const supabase = await createClient();
@@ -47,13 +47,13 @@ export async function signup(prevState, formData) {
   const confirm = String(formData.get('confirm') ?? '');
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { error: 'Enter a valid email address.' };
+    return { error: 'Masukkan alamat email yang valid.' };
   }
   if (password.length < 8) {
-    return { error: 'Use at least 8 characters for your password.' };
+    return { error: 'Gunakan minimal 8 karakter untuk kata sandi.' };
   }
   if (password !== confirm) {
-    return { error: 'The two passwords do not match.' };
+    return { error: 'Kedua kata sandi tidak sama.' };
   }
 
   const supabase = await createClient();
@@ -67,7 +67,7 @@ export async function signup(prevState, formData) {
   if (data.session) redirect('/dashboard');
 
   return {
-    notice: 'Check your inbox and confirm your email, then sign in. The link is valid for 24 hours.',
+    notice: 'Periksa kotak masuk Anda dan konfirmasi email, lalu masuk. Tautan berlaku selama 24 jam.',
   };
 }
 

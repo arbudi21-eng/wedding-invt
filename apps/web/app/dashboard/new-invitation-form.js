@@ -43,7 +43,7 @@ export default function NewInvitationForm() {
 
       <div className="row">
         <div className="field">
-          <label htmlFor="new-bride">First partner</label>
+          <label htmlFor="new-bride">Nama mempelai wanita</label>
           <input
             id="new-bride"
             name="bride"
@@ -56,7 +56,7 @@ export default function NewInvitationForm() {
         </div>
 
         <div className="field">
-          <label htmlFor="new-groom">Second partner</label>
+          <label htmlFor="new-groom">Nama mempelai pria</label>
           <input
             id="new-groom"
             name="groom"
@@ -69,18 +69,18 @@ export default function NewInvitationForm() {
         </div>
 
         <div className="field">
-          <label htmlFor="new-date">Wedding date</label>
+          <label htmlFor="new-date">Tanggal acara</label>
           <input id="new-date" name="date" type="date" aria-invalid={errors.date ? 'true' : undefined} />
           {errors.date ? <p className="field-error">{errors.date}</p> : null}
         </div>
 
         <div className="field">
-          <label htmlFor="new-time">Start time</label>
+          <label htmlFor="new-time">Waktu mulai</label>
           <input id="new-time" name="time" type="time" defaultValue="10:00" />
         </div>
 
         <div className="field">
-          <label htmlFor="new-design">Design</label>
+          <label htmlFor="new-design">Desain</label>
           <select id="new-design" name="design" value={design} onChange={(event) => setDesign(event.target.value)}>
             {DESIGNS.map((d) => (
               <option key={d.id} value={d.id}>
@@ -88,16 +88,16 @@ export default function NewInvitationForm() {
               </option>
             ))}
           </select>
-          <span className="hint">Pick one in the gallery above — the dropdown follows your selection.</span>
+          <span className="hint">Pilih desain di galeri atas — pilihan di sini akan mengikuti.</span>
         </div>
       </div>
 
       <div className="hero-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
         <button className="button" type="submit" disabled={pending}>
-          {pending ? 'Creating draft…' : 'Create draft'}
+          {pending ? 'Membuat draf…' : 'Buat draf'}
         </button>
         <button className="button secondary" type="button" onClick={previewInvitation}>
-          Preview design
+          Pratinjau desain
         </button>
       </div>
     </form>

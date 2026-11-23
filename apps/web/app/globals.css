@@ -139,9 +139,9 @@ main.narrow {
 }
 
 .eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--accent);
   margin-bottom: 0.75rem;
 }
@@ -398,8 +398,7 @@ textarea {
   gap: 0.75rem;
   color: var(--ink-soft);
   font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.01em;
 }
 
 .divider::before,
@@ -466,11 +465,10 @@ textarea {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 0.18rem 0.62rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  padding: 0.2rem 0.64rem;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .badge.draft {
@@ -740,13 +738,12 @@ footer.foot {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 0.08rem 0.5rem;
+  padding: 0.12rem 0.56rem;
   background: var(--ok-soft);
   color: var(--ok);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .preview-link-group {
@@ -945,11 +942,10 @@ footer.foot {
 .stat-card.warn { border-left: 4px solid var(--warn); }
 
 .stat-label {
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   color: var(--ink-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-weight: 500;
 }
 
 .stat-value {
@@ -1014,13 +1010,13 @@ footer.foot {
 
 .cloud-word {
   font-family: var(--serif);
-  font-weight: 700;
+  font-weight: 500;
   display: inline-block;
-  transition: transform 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .cloud-word:hover {
-  transform: scale(1.06) !important;
+  color: var(--accent);
 }
 
 .guest-table-wrapper {

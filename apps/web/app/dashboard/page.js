@@ -19,7 +19,7 @@ function updatedLabel(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export default async function DashboardPage() {
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
             </p>
           </section>
         ) : (
-          <section className="draft-list" aria-label="Your invitations">
+          <section className="draft-list" aria-label="Undangan Anda">
             {drafts.map((wedding) => {
               const title = draftTitle(wedding.content);
               const when = formatDateISO(wedding.content?.dateISO);
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
                       </Link>
                     )}
                     <Link className="button small secondary" href={`/manage/${wedding.slug}`}>
-                      Manage
+                      Kelola
                     </Link>
                     <DeleteDraftButton id={wedding.id} title={title} />
                   </div>

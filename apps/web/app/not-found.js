@@ -2,7 +2,7 @@ import Link from 'next/link';
 import SiteHeader from '@/components/site-header';
 
 export const metadata = {
-  title: 'Not found',
+  title: 'Tidak ditemukan',
 };
 
 export default function NotFound() {
@@ -12,12 +12,12 @@ export default function NotFound() {
       <main className="narrow">
         <div className="card">
           <p className="eyebrow">404</p>
-          <h1>That page is not here</h1>
+          <h1>Halaman ini tidak ada</h1>
           <p className="muted">
-            The invitation may have been deleted, or the link belongs to another account.
+            Undangan mungkin sudah dihapus, atau tautan ini milik akun lain.
           </p>
           <Link className="button" href="/dashboard">
-            Go to your invitations
+            Ke undangan saya
           </Link>
         </div>
       </main>
